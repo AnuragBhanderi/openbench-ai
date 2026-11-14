@@ -91,6 +91,15 @@ def build_parser() -> argparse.ArgumentParser:
     val_parser.add_argument("--format", choices=["json", "markdown", "csv"], default="json", help="v0.4.0: audit report format.")
     val_parser.add_argument("--near-duplicate-threshold", type=float, default=0.85, help="v0.4.0: DQ003 Jaccard threshold.")
     val_parser.add_argument("--metrics", nargs="+", default=None, help="v0.4.0: metric names to check (DQ008).")
+    val_parser.add_argument(
+        "--near-duplicate-method",
+        choices=["lexical", "semantic"],
+        default="lexical",
+        help="v0.5.0: 'semantic' adds an embedding pass that finds paraphrases (needs the 'semantic' extra).",
+    )
+    val_parser.add_argument("--embedding-model", type=str, default="sentence-transformers/all-MiniLM-L6-v2",
+                            help="v0.5.0: local sentence-transformers model for --near-duplicate-method semantic.")
+    val_parser.add_argument("--semantic-threshold", type=float, default=0.9, help="v0.5.0: cosine threshold for semantic DQ003.")
 
     # 2. evaluate (v0.1.0 & v0.2.0 preserved)
     eval_parser = subparsers.add_parser(
@@ -465,7 +474,7 @@ def build_parser() -> argparse.ArgumentParser:
     rank_parser.add_argument("--seed", type=int, default=0)
     rank_parser.add_argument("--exploratory", action="store_true", help="Rank inputs that fail hard compatibility checks (descriptive only).")
     rank_parser.add_argument("--output", type=str, default=None)
-    rank_parser.add_argument("--format", choices=["json", "markdown", "csv"], default="markdown")
+    rank_parser.add_argument("--format", choices=["json", "markdown", "csv", "html"], default="markdown")
 
     plan_parser = subparsers.add_parser(
         "plan",
@@ -524,6 +533,66 @@ def build_parser() -> argparse.ArgumentParser:
     judge_parser.add_argument("--resamples", type=int, default=10_000)
     judge_parser.add_argument("--output", type=str, default=None)
     judge_parser.add_argument("--format", choices=["json", "markdown", "csv"], default="markdown")
+
+    # v0.5.0: benchmarks and reports
+    imp_parser = subparsers.add_parser(
+        "import-dataset",
+        help="v0.5.0: convert a local benchmark file (QA or multiple choice) into an OpenBench JSONL dataset.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_examples(
+            "openbench import-dataset mmlu_math.csv --format mcq-csv --category math --license MIT --output datasets/mmlu_math.jsonl",
+            "openbench import-dataset qa.jsonl --format qa-jsonl --category trivia --question-field q --answer-field a --output trivia.jsonl",
+        ),
+    )
+    imp_parser.add_argument("input", type=str)
+    imp_parser.add_argument("--format", required=True, choices=["qa-jsonl", "qa-csv", "mcq-jsonl", "mcq-csv"], dest="import_format")
+    imp_parser.add_argument("--category", required=True, type=str)
+    imp_parser.add_argument("--output", required=True, type=str)
+    imp_parser.add_argument("--id-prefix", type=str, default=None)
+    imp_parser.add_argument("--source", type=str, default=None, help="Where the benchmark comes from (recorded in metadata).")
+    imp_parser.add_argument("--license", type=str, default=None, dest="license_name", help="The benchmark's licence (recorded in metadata).")
+    imp_parser.add_argument("--difficulty", choices=["easy", "medium", "hard"], default=None)
+    imp_parser.add_argument("--question-field", type=str, default="question")
+    imp_parser.add_argument("--answer-field", type=str, default="answer")
+    imp_parser.add_argument("--id-field", type=str, default="id")
+    imp_parser.add_argument("--overwrite", action="store_true")
+
+    cont_parser = subparsers.add_parser(
+        "audit-contamination",
+        help="v0.5.0: read-only check of word n-gram overlap between a dataset and a reference corpus.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_examples(
+            "openbench audit-contamination datasets/reasoning/sample.jsonl --corpus my_finetune_data/ --format markdown",
+            "openbench audit-contamination my.jsonl --corpus public_benchmark.jsonl --ngram 8 --threshold 0.3 --output contamination.json",
+        ),
+    )
+    cont_parser.add_argument("dataset_path", type=str)
+    cont_parser.add_argument("--corpus", required=True, type=str, help="A text, Markdown, JSON, JSONL or CSV file, or a directory of them.")
+    cont_parser.add_argument("--ngram", type=int, default=13)
+    cont_parser.add_argument("--threshold", type=float, default=0.5)
+    cont_parser.add_argument("--min-words", type=int, default=8)
+    cont_parser.add_argument("--output", type=str, default=None)
+    cont_parser.add_argument("--format", choices=["json", "markdown", "csv"], default="markdown")
+
+    card_parser = subparsers.add_parser(
+        "dataset-card",
+        help="v0.5.0: generate a dataset card (facts computed from the data, author sections left as TODO).",
+    )
+    card_parser.add_argument("dataset_path", type=str)
+    card_parser.add_argument("--format", choices=["markdown", "json"], default="markdown")
+    card_parser.add_argument("--output", type=str, default=None)
+
+    serve_parser = subparsers.add_parser(
+        "serve",
+        help="v0.5.0: read-only local web dashboard for runs, repeat groups and saved reports.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_examples("openbench serve --experiments-dir experiments --reports-dir reports", "openbench serve --port 9000"),
+    )
+    serve_parser.add_argument("--experiments-dir", type=str, default="experiments")
+    serve_parser.add_argument("--reports-dir", type=str, default=None, help="Directory of saved .json/.html analysis reports.")
+    serve_parser.add_argument("--host", type=str, default="127.0.0.1")
+    serve_parser.add_argument("--port", type=int, default=8765)
+    serve_parser.add_argument("--allow-remote", action="store_true", help="Allow listening on a non-loopback address (exposes your results).")
 
     # v0.5.0: metrics and plugins listings
     met_parser = subparsers.add_parser("metrics", help="v0.5.0: list built-in and plugin metrics.")
@@ -604,7 +673,8 @@ def build_parser() -> argparse.ArgumentParser:
     ana_parser.add_argument("--exploratory", action="store_true", help="Descriptive-only comparison of incompatible inputs.")
     ana_parser.add_argument("--exploratory-reason", type=str, default=None)
     ana_parser.add_argument("--output", type=str, default=None)
-    ana_parser.add_argument("--format", choices=["json", "markdown", "csv"], default="json")
+    ana_parser.add_argument("--format", choices=["json", "markdown", "csv", "html"], default="json",
+                            help="Report format; v0.5.0 adds 'html' (one self-contained file).")
 
     # 14. preferences (v0.4.0 new: create, validate, analyze)
     pref_parser = subparsers.add_parser(
@@ -759,7 +829,24 @@ def _handle_dataset_audit(args: argparse.Namespace) -> int:
     from openbench.reporting_v040 import render_audit
     from openbench.security import validate_safe_output_path
 
-    report = DatasetAuditor(near_duplicate_threshold=args.near_duplicate_threshold, metrics=args.metrics).audit(args.dataset_path)
+    embedder = None
+    if getattr(args, "near_duplicate_method", "lexical") == "semantic":
+        from openbench.metrics.semantic_similarity import HuggingFaceEmbeddingProvider
+
+        try:
+            embedder = HuggingFaceEmbeddingProvider(model_id=args.embedding_model)
+            embedder._load_model()  # fail early, before the audit starts
+        except Exception as exc:  # missing optional dependency or model
+            print(
+                f"Error: semantic near-duplicate detection needs the 'semantic' extra "
+                f"(pip install 'openbench-ai[semantic]') and a local model: {sanitize_error_message(str(exc))}",
+                file=sys.stderr,
+            )
+            return 2
+    report = DatasetAuditor(
+        near_duplicate_threshold=args.near_duplicate_threshold, metrics=args.metrics,
+        embedding_provider=embedder, semantic_threshold=getattr(args, "semantic_threshold", 0.9),
+    ).audit(args.dataset_path)
     payload = report.to_dict()
     try:
         dataset = DatasetLoader.load(args.dataset_path)
@@ -1661,7 +1748,12 @@ def _handle_analyze(args: argparse.Namespace) -> int:
         }
 
     payload = redact_sensitive_data(payload)
-    text = render_analysis(payload, args.format)
+    if args.format == "html":
+        from openbench.html_report import render_html
+
+        text = render_html(payload)
+    else:
+        text = render_analysis(payload, args.format)
     if args.output:
         out = validate_safe_output_path(args.output)
         for parent in out.resolve().parents:
@@ -1910,7 +2002,13 @@ def _handle_rank(args: argparse.Namespace) -> int:
         arms, args.metric, alpha=args.alpha, confidence_level=args.confidence_level, resamples=args.resamples,
         permutations=args.permutations, analysis_seed=args.seed, selected_ids=selected, allow_incompatible=args.exploratory,
     )
-    _write_or_print(render_ranking(redact_sensitive_data(payload), args.format), args.output, f"Ranking ({args.format})")
+    if args.format == "html":
+        from openbench.html_report import render_html
+
+        text = render_html(redact_sensitive_data(payload))
+    else:
+        text = render_ranking(redact_sensitive_data(payload), args.format)
+    _write_or_print(text, args.output, f"Ranking ({args.format})")
     if payload.get("banner"):
         print(f"Warning: {payload['banner']}", file=sys.stderr)
     return 0
@@ -2072,6 +2170,81 @@ def _handle_judge(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_import_dataset(args: argparse.Namespace) -> int:
+    """`openbench import-dataset` (v0.5.0): convert a local benchmark file."""
+    from openbench.importers import import_benchmark
+    from openbench.security import validate_safe_output_path
+
+    out = validate_safe_output_path(args.output)
+    if out.exists() and not args.overwrite:
+        print(f"Error: {out} exists; use --overwrite to replace it.", file=sys.stderr)
+        return 2
+    result = import_benchmark(
+        args.input, args.import_format, category=args.category, id_prefix=args.id_prefix, source=args.source,
+        license_name=args.license_name, difficulty=args.difficulty, question_field=args.question_field,
+        answer_field=args.answer_field, id_field=args.id_field,
+    )
+    if not result.records:
+        print(f"Error: no records could be converted ({len(result.skipped)} skipped).", file=sys.stderr)
+        for s in result.skipped[:20]:
+            print(f"  line {s['line']}: {s['reason']}", file=sys.stderr)
+        return 1
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(result.to_jsonl(), encoding="utf-8")
+    dataset = DatasetLoader.load(out)  # validate with the normal loader
+    print(f"Imported {len(dataset)} record(s) into {out} (checksum {dataset.checksum[:12]}).")
+    if result.skipped:
+        print(f"Warning: skipped {len(result.skipped)} record(s):", file=sys.stderr)
+        for s in result.skipped[:20]:
+            print(f"  line {s['line']}: {s['reason']}", file=sys.stderr)
+    print("Check the benchmark's licence before sharing results or the converted file.")
+    return 0
+
+
+def _handle_audit_contamination(args: argparse.Namespace) -> int:
+    """`openbench audit-contamination` (v0.5.0): read-only n-gram overlap check."""
+    from openbench.contamination import audit_contamination, render_contamination
+
+    dataset = DatasetLoader.load(args.dataset_path)
+    payload = audit_contamination(dataset, args.corpus, ngram=args.ngram, threshold=args.threshold, min_words=args.min_words)
+    _write_or_print(render_contamination(payload, args.format), args.output, f"Contamination audit ({args.format})")
+    s = payload["summary"]
+    print(f"{s['records_flagged']} of {len(payload['records'])} record(s) flagged (overlap >= {args.threshold}). "
+          "A low overlap does not prove the dataset is clean.", file=sys.stderr)
+    return 0
+
+
+def _handle_dataset_card(args: argparse.Namespace) -> int:
+    """`openbench dataset-card` (v0.5.0)."""
+    from openbench.datacard import build_card, render_card
+
+    card = build_card(args.dataset_path)
+    _write_or_print(render_card(card, args.format), args.output, f"Dataset card ({args.format})")
+    return 0
+
+
+def _handle_serve(args: argparse.Namespace) -> int:
+    """`openbench serve` (v0.5.0): read-only local dashboard."""
+    from openbench.serve import create_server
+
+    try:
+        server = create_server(args.experiments_dir, args.reports_dir, args.host, args.port, args.allow_remote)
+    except (ValueError, OSError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    host, port = server.server_address[:2]
+    print(f"OpenBench dashboard (read-only) at http://{host}:{port}/  -  press Ctrl+C to stop.")
+    if args.host not in ("127.0.0.1", "localhost", "::1"):
+        print("Warning: listening on a non-loopback address; anyone who can reach it can read your results.", file=sys.stderr)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+    return 0
+
+
 def _handle_metrics(args: argparse.Namespace) -> int:
     """Execute `openbench metrics list` (v0.5.0)."""
     from openbench.metrics import METRIC_REGISTRY, list_registered_metrics
@@ -2213,6 +2386,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _handle_plan(args)
         if args.command == "judge":
             return _handle_judge(args)
+        if args.command == "import-dataset":
+            return _handle_import_dataset(args)
+        if args.command == "audit-contamination":
+            return _handle_audit_contamination(args)
+        if args.command == "dataset-card":
+            return _handle_dataset_card(args)
+        if args.command == "serve":
+            return _handle_serve(args)
         if args.command == "plugins":
             return _handle_plugins(args)
         if args.command == "analyze":

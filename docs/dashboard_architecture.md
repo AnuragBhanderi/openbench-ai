@@ -1,5 +1,7 @@
 # Future Dashboard Architecture & Data Contracts (v0.2.0 Preparation)
 
+> **v0.5.0:** a read-only local dashboard now exists: `openbench serve`. See [dashboard.md](dashboard.md). This page keeps the earlier design notes.
+
 OpenBench AI `v0.2.0` deliberately avoids bundling a heavyweight web framework inside the core Python package. Instead, all evaluation, comparison, catalog, and history outputs adhere to strict, versioned JSON data contracts so a future `v1.0.0` web dashboard (or static site generator) can consume them directly.
 
 ---

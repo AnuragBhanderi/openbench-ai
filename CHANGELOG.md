@@ -24,6 +24,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Calibration studies for all new methods: `tests/reference/_ref_v050_calibration.py`, results in `tests/reference/data/v050_calibration_results.json`, documented in `docs/statistical_methodology.md` sections 18–22.
 - A test that a one-item stratum stays descriptive with `--stratum-tests` (#30).
 
+### Added (Milestone 3: Benchmarks and reports)
+- **`openbench import-dataset`** (#35): converts local QA and multiple-choice files (JSONL or CSV) into OpenBench datasets, keeping original IDs, source and licence, and listing skipped rows.
+- **Semantic near-duplicates** (#21): `validate-dataset --quality-checks --near-duplicate-method semantic` adds an embedding pass (optional `semantic` extra); each DQ003 finding records its method.
+- **`openbench audit-contamination`** (#47): read-only word n-gram overlap between a dataset and a corpus you supply, with per-record overlap, longest shared span and flags.
+- **`openbench dataset-card`** (#48): a deterministic dataset card with computed facts and TODO placeholders for the author.
+- **HTML reports** (#18): `analyze --format html` and `rank --format html` write one self-contained, escaped file with inline SVG interval charts.
+- **`openbench serve`** (#36): a read-only local dashboard for runs, repeat groups and saved reports (standard library, `127.0.0.1` by default).
+
 ### Changed
 - `openbench runs list` prints a compact aligned table; `--wide` restores the previous one-line-per-run format (#4).
 

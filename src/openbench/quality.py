@@ -94,6 +94,9 @@ def shingles(text: str, size: int = SHINGLE_SIZE) -> frozenset[str]:
     return frozenset(text[i : i + size] for i in range(len(text) - size + 1))
 
 
+DEFAULT_SEMANTIC_THRESHOLD = 0.9
+
+
 def jaccard(a: frozenset[str], b: frozenset[str]) -> float:
     if not a and not b:
         return 1.0
@@ -252,9 +255,16 @@ class DatasetAuditor:
         metric_options: dict[str, dict[str, Any]] | None = None,
         use_review_notes: bool = True,
         review_notes: list[dict[str, Any]] | None = None,
+        embedding_provider: Any | None = None,
+        semantic_threshold: float = DEFAULT_SEMANTIC_THRESHOLD,
     ) -> None:
         if not (isinstance(near_duplicate_threshold, (int, float)) and 0.0 < near_duplicate_threshold <= 1.0):
             raise ValueError("near_duplicate_threshold must lie in (0, 1]")
+        if not (isinstance(semantic_threshold, (int, float)) and 0.0 < semantic_threshold <= 1.0):
+            raise ValueError("semantic_threshold must lie in (0, 1]")
+        #: v0.5.0 (#21): optional embedding provider for a semantic near-duplicate pass.
+        self.embedding_provider = embedding_provider
+        self.semantic_threshold = float(semantic_threshold)
         self.threshold = float(near_duplicate_threshold)
         self.max_pairwise = int(max_records_for_pairwise)
         self.metrics = list(metrics) if metrics else []
@@ -338,6 +348,11 @@ class DatasetAuditor:
                 "shingle_size": SHINGLE_SIZE,
                 "near_duplicate_threshold": self.threshold,
                 "near_duplicate_method": "character 5-gram Jaccard similarity (lexical heuristic, not semantic)",
+                **({"semantic_near_duplicates": {
+                    "embedding": self.embedding_provider.metadata(),
+                    "threshold": self.semantic_threshold,
+                    "similarity": "cosine of prompt embeddings",
+                }} if self.embedding_provider is not None else {}),
                 "max_records_for_pairwise": self.max_pairwise,
                 "keyword_rule": "each metadata.keywords entry must be a substring of normalize_text(expected_answer) after normalize_text (keyword_coverage semantics)",
                 "review_notes_applied": self.use_review_notes,
@@ -414,7 +429,44 @@ class DatasetAuditor:
             summary["max_near_duplicate_similarity"] = round(best[1], 6)
             summary["max_similarity_pair"] = list(best[0])
         summary["near_duplicate_check"] = "completed"
+        if self.embedding_provider is not None:
+            lexical_pairs = {(a, b) for (a, b), sim in pairs.items() if sim >= self.threshold}
+            sem_findings, sem_summary = self._semantic_pairs(normalised, records, exact_pairs | lexical_pairs)
+            out += sem_findings
+            summary["semantic"] = sem_summary
         return out, summary
+
+    def _semantic_pairs(self, normalised: dict[str, str], records: list[Any], skip: set[tuple[str, str]]) -> tuple[list[AuditFinding], dict[str, Any]]:
+        """v0.5.0 (#21): cosine similarity of prompt embeddings; adds paraphrases the lexical pass misses."""
+        from openbench.metrics.semantic_similarity import cosine_similarity
+
+        prompts = {r.record_id: r.payload.get("prompt") for r in records if r.record_id in normalised}
+        ids = sorted(prompts)
+        vectors = {rid: self.embedding_provider.embed(str(prompts[rid])) for rid in ids}
+        findings: list[AuditFinding] = []
+        best: tuple[tuple[str, str], float] | None = None
+        method = "semantic" if getattr(self.embedding_provider, "is_semantic_embedding", False) else "embedding (lexical provider)"
+        for i, a in enumerate(ids):
+            for b in ids[i + 1:]:
+                sim = float(cosine_similarity(vectors[a], vectors[b]))
+                if best is None or sim > best[1]:
+                    best = ((a, b), sim)
+                if sim >= self.semantic_threshold and (a, b) not in skip:
+                    findings.append(AuditFinding(
+                        "DQ003", "warning",
+                        f"Possible near-duplicate ({method}); review manually: '{a}' and '{b}' have embedding cosine similarity {sim:.3f}.",
+                        record_ids=(a, b),
+                        details={"similarity": round(sim, 6), "threshold": self.semantic_threshold, "method": method,
+                                 "embedding_model": getattr(self.embedding_provider, "model_id", "unspecified")},
+                        remediation="Review manually; similar meaning is not proof of duplication.",
+                    ))
+        return findings, {
+            "method": method,
+            "pairs_compared": len(ids) * (len(ids) - 1) // 2,
+            "max_similarity": round(best[1], 6) if best else None,
+            "max_similarity_pair": list(best[0]) if best else None,
+            "findings": len(findings),
+        }
 
     def _similar_pairs(self, sets: dict[str, frozenset[str]]) -> dict[tuple[str, str], float]:
         """All pairs with Jaccard >= a low reporting floor, via exact prefix filtering.
