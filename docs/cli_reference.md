@@ -125,6 +125,8 @@ Execute a model provider against a dataset, evaluate metrics, and create a verif
 | `--endpoint` |  |  |  | Optional provider HTTP endpoint (e.g. http://localhost:11434 for Ollama). |
 | `--metrics` |  |  |  | Metrics to evaluate (default: exact_match accuracy keyword_coverage, or profile setting). |
 | `--concurrency` |  |  |  | Number of concurrent model requests (default: 1). |
+| `--max-requests-per-minute` |  |  |  | v0.5.0: limit provider requests per minute across all workers (for hosted APIs). |
+| `--api-key-env` |  |  |  | v0.5.0: environment variable holding the API key for openai_compatible (default: OPENAI_API_KEY). The key itself is never stored. |
 | `--timeout` |  |  |  | Per-request timeout in seconds (default: 30.0). |
 | `--max-attempts` |  |  |  | Maximum retry attempts per item (default: 3). |
 | `--no-cache` |  |  |  | Disable deterministic response caching for this run. |
@@ -151,6 +153,7 @@ List stored experiment runs.
 | `--provider` |  |  |  |  |
 | `--format` |  | `text` | `text`, `json` |  |
 | `--group` |  |  |  | *(v0.4.0)* list only the runs of this repeat group. |
+| `--wide` |  |  |  | v0.5.0: print the full one-line-per-run format (all scores, origin, dataset). |
 
 ## `openbench runs show`
 
@@ -194,6 +197,30 @@ Compare two or more experiment runs by their RUN_IDs.
 | `--experiments-dir` |  |  |  |  |
 | `--output` |  |  |  |  |
 | `--format` |  | `text` | `text`, `json`, `markdown` |  |
+
+## `openbench metrics`
+
+v0.5.0: list built-in and plugin metrics.
+
+## `openbench metrics list`
+
+List registered metrics and where they come from.
+
+| Argument | Required | Default | Choices | Help |
+| :--- | :---: | :--- | :--- | :--- |
+| `--format` |  | `text` | `text`, `json` |  |
+
+## `openbench plugins`
+
+v0.5.0: list installed OpenBench plugins.
+
+## `openbench plugins list`
+
+Discover and list installed plugins (this imports them).
+
+| Argument | Required | Default | Choices | Help |
+| :--- | :---: | :--- | :--- | :--- |
+| `--format` |  | `text` | `text`, `json` |  |
 
 ## `openbench providers`
 

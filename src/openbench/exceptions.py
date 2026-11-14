@@ -88,3 +88,19 @@ class IncompatibleComparisonError(ConfigurationError):
     def __init__(self, message: str, report: object | None = None) -> None:
         super().__init__(message)
         self.report = report
+
+
+class ProviderRateLimitError(OpenBenchError):
+    """Raised when a provider rejects a request because of rate limiting (HTTP 429) (v0.5.0).
+
+    ``retry_after_seconds`` holds the provider's ``Retry-After`` value when it sent one; the
+    execution engine waits that long (capped) before retrying instead of its normal backoff.
+    """
+
+    def __init__(self, message: str, retry_after_seconds: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after_seconds = retry_after_seconds
+
+
+class PluginError(ConfigurationError):
+    """Raised when an installed OpenBench plugin cannot be loaded or is invalid (v0.5.0)."""

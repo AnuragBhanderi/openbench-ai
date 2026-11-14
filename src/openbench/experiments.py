@@ -265,6 +265,11 @@ class ExperimentManager:
             "retry_count": perf_report.retry_count,
             "was_cancelled": outcome.was_cancelled,
         }
+        # v0.5.0: rate-limit counters are recorded only when they apply, so v0.4.0 runs are unchanged.
+        if outcome.rate_limited_retries:
+            failure_info["rate_limited_retries"] = outcome.rate_limited_retries
+        if exec_cfg.max_requests_per_minute:
+            failure_info["rate_limit_wait_seconds"] = outcome.rate_limit_wait_seconds
 
         env_meta = self._environment_metadata()
         gen_cfg_dict = redact_sensitive_data(provider.reproducibility_metadata())

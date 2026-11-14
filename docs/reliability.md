@@ -12,6 +12,12 @@ $$\text{delay}(k) = \min\left(\text{max\_backoff}, \; \text{initial\_backoff} \t
 
 Validation and configuration errors (`validation_error`) fail immediately without wasting retries.
 
+### Rate limits (v0.5.0)
+
+- **Requests per minute.** `--max-requests-per-minute N` (profile: `execution.max_requests_per_minute`) spaces requests evenly, one every `60 / N` seconds, across all concurrent workers, so the limit holds over any one-minute window. The time spent waiting is recorded as `failure_info.rate_limit_wait_seconds`.
+- **HTTP 429 and `Retry-After`.** When a provider rejects a request with HTTP 429 and sends `Retry-After` (seconds or an HTTP date), the engine waits that long before the next attempt, capped at `execution.max_retry_after_seconds` (default 60). Without the header it uses the normal backoff. Such retries are counted in `failure_info.rate_limited_retries`.
+- Both are off by default, and runs without them record exactly the same fields as v0.4.0.
+
 ---
 
 ## 2. Failure Classification
@@ -41,7 +47,8 @@ If an execution run is interrupted or experiences partial provider failures (`st
 - **v0.4.0:**
   - Runs in a repeat group add `(repeat_group_id, repetition_index)` to the key. Repetitions and independent groups therefore never share cached responses, and a resumed repetition reuses only its own entries. Single-run keys are unchanged.
   - A malformed cache file is reported with the offending line and can always be removed with `openbench cache clear`.
-  - The cache is safe for concurrent threads in one process. It is not safe for several processes writing at once.
+  - The cache is safe for concurrent threads in one process.
+- **v0.5.0: several processes.** Loads, appends and clears take an advisory file lock (`cache_entries.lock` next to the cache file; `fcntl.flock` on Linux and macOS, `msvcrt.locking` on Windows). Several OpenBench processes can therefore share one cache directory without losing or corrupting entries. If the lock cannot be taken within 30 seconds, the run stops with a message naming the lock file. Two processes may still both generate and store the same entry; the cache is not a distributed exactly-once store.
 
   See [repeated_runs.md](repeated_runs.md).
 - **Important**: In-flight duplicate protection prevents concurrent workers within the same run from dispatching duplicate requests for the same record ID, but OpenBench AI does not claim distributed exactly-once execution when an external HTTP provider times out mid-generation.
