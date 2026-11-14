@@ -1,0 +1,86 @@
+site_name: OpenBench AI
+site_description: Statistically sound LLM benchmarking in Python.
+site_url: https://lakshaychhaba0001-sys.github.io/openbench-ai/
+repo_url: https://github.com/lakshaychhaba0001-sys/openbench-ai
+repo_name: openbench-ai
+edit_uri: edit/main/docs/
+docs_dir: docs
+strict: true
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle: {icon: material/weather-night, name: Switch to dark mode}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle: {icon: material/weather-sunny, name: Switch to light mode}
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+
+validation:
+  omitted_files: warn
+  absolute_links: info
+  unrecognized_links: warn
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: installation.md
+      - Usage: usage.md
+      - Troubleshooting: troubleshooting.md
+  - Comparing models:
+      - Paired comparison: model_comparison.md
+      - Reading a comparison report: reading_a_report.md
+      - Ranking and planning: ranking_and_planning.md
+      - Repeated runs: repeated_runs.md
+      - Human preferences: human_preferences.md
+      - LLM judge: llm_judge.md
+  - Running models:
+      - Providers: providers.md
+      - Ollama: ollama.md
+      - Hugging Face (experimental): huggingface.md
+      - Model execution: model_execution.md
+      - Reliability and caching: reliability.md
+      - Performance monitoring: performance_monitoring.md
+      - Custom providers: custom_provider.md
+      - Plugins: plugins.md
+  - Datasets and metrics:
+      - Dataset catalog: dataset_catalog.md
+      - Benchmark tools: benchmark_tools.md
+      - Quality audits: quality_audits.md
+      - Core metrics: metrics.md
+      - Advanced metrics: advanced_metrics.md
+      - Configuration profiles: configuration.md
+  - Results and reproducibility:
+      - HTML reports and dashboard: dashboard.md
+      - Reproducibility and reports: reproducibility.md
+      - Experiment tracking: experiment_tracking.md
+      - Historical tracking: historical_tracking.md
+      - Benchmark integrity: benchmark_integrity.md
+  - Statistics:
+      - Statistical methodology: statistical_methodology.md
+      - Evaluation methodology: evaluation_methodology.md
+  - Reference:
+      - CLI reference: cli_reference.md
+      - Python API: api_reference.md
+      - Architecture: architecture.md
+      - Integrations: integrations.md
+      - Security and privacy: security_and_privacy.md
+      - Backward compatibility: backward_compatibility.md
+      - v0.3 compatibility: v0_3_compatibility.md
+      - Dashboard design notes: dashboard_architecture.md
+  - Contributing: contributing.md

@@ -38,11 +38,11 @@ def test_relative_links_resolve():
 
 def test_versions_are_consistent():
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'version = "0.4.0"' in pyproject
-    assert openbench.__version__ == "0.4.0"
-    assert 'version: "0.4.0"' in (ROOT / "CITATION.cff").read_text(encoding="utf-8")
-    assert "## [0.4.0]" in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert "# OpenBench AI (v0.4.0)" in (ROOT / "README.md").read_text(encoding="utf-8")
+    assert 'version = "0.5.0"' in pyproject
+    assert openbench.__version__ == "0.5.0"
+    assert 'version: "0.5.0"' in (ROOT / "CITATION.cff").read_text(encoding="utf-8")
+    assert "## [0.5.0]" in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert "# OpenBench AI (v0.5.0)" in (ROOT / "README.md").read_text(encoding="utf-8")
 
 
 def test_project_wording_and_authorship_preserved():
@@ -81,3 +81,16 @@ def test_example_profiles_load():
 
     for path in sorted((ROOT / "configs").glob("*.yaml")):
         ProfileLoader.load_file(path)
+
+
+def test_no_text_file_starts_with_a_byte_order_mark():
+    """v0.5.0: a UTF-8 BOM breaks some tools; keep tracked text files BOM-free."""
+    suffixes = {".md", ".py", ".toml", ".yml", ".yaml", ".json", ".jsonl", ".txt", ".cff", ".cfg", ".csv"}
+    offenders = [
+        str(p.relative_to(ROOT))
+        for p in ROOT.rglob("*")
+        if p.is_file() and p.suffix in suffixes
+        and not any(part in {".git", "node_modules", "site", ".venv", "build", "dist"} or part.startswith(".pytest") for part in p.relative_to(ROOT).parts)
+        and p.read_bytes()[:3] == b"\xef\xbb\xbf"
+    ]
+    assert offenders == []

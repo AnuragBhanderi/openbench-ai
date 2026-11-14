@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openbench-ai"
-version = "0.4.0"
+version = "0.5.0"
 description = "A modular, open-source LLM experiment execution, evaluation, statistical comparison, and benchmarking platform."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -24,6 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Software Development :: Testing",
+    "Operating System :: OS Independent",
 ]
 dependencies = []
 
@@ -51,6 +52,11 @@ metrics = [
 ]
 semantic = [
     "sentence-transformers>=2.2.0,<4.0.0",
+]
+# Documentation site (mkdocs.yml); not needed to use OpenBench.
+docs = [
+    "mkdocs>=1.6,<2",
+    "mkdocs-material>=9.5,<10",
 ]
 # Reference libraries for the statistical cross-check tests only (tests/reference).
 # OpenBench library code never imports them; they are not runtime dependencies.

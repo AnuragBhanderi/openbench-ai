@@ -1,4 +1,4 @@
-﻿# Reading a model comparison report
+# Reading a model comparison report
 
 This guide walks through a real OpenBench AI v0.4.0 comparison report generated with the offline mock provider. It explains how to read the result, understand the statistical test, and interpret warnings without overstating what the evidence shows.
 

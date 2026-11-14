@@ -1,6 +1,6 @@
 # Developer & Contributor Guide
 
-This document supplements the root [CONTRIBUTING.md](../CONTRIBUTING.md) with architectural notes for extending OpenBench AI.
+This document supplements the root [CONTRIBUTING.md](https://github.com/lakshaychhaba0001-sys/openbench-ai/blob/main/CONTRIBUTING.md) with architectural notes for extending OpenBench AI.
 
 ## Directory Layout Conventions
 
