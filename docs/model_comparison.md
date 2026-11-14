@@ -61,6 +61,25 @@ Wording rules: a non-significant difference is reported as "No statistically sig
 
 See [statistical_methodology.md](statistical_methodology.md) for assumptions and exact or approximate status.
 
+### Equivalence for continuous metrics (v0.5.0)
+
+By default, equivalence for continuous metrics is reported for description only, as in
+v0.4.0. `--continuous-equivalence empirical_bernstein` switches to a bounded test whose error
+rate is guaranteed for any distribution of per-item differences. It can establish equivalence,
+but it needs many items (typically several hundred) and a margin that is not tiny:
+
+```bash
+openbench analyze --runs run_<a> run_<b> --metrics f1 --equivalence-margin 0.05 \
+  --continuous-equivalence empirical_bernstein
+```
+
+See [statistical_methodology.md](statistical_methodology.md), section 22.
+
+## Ranking more than two models
+
+`openbench rank` ranks several runs at once, with rank intervals. See
+[ranking_and_planning.md](ranking_and_planning.md).
+
 ## Compatibility checks
 
 | Condition | Result |

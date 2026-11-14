@@ -116,3 +116,18 @@ openbench analyze --runs grp_<id> --format markdown --output variability.md
 3. **Failures**: missing and invalid responses per repetition, and items failing in some or all repetitions. Failures are excluded from per-item means, never counted as wrong answers, and reported on their own.
 
 It also reports the run-to-run distribution of headline scores, latency and token variation, and per-category and per-difficulty breakdowns. A hierarchical bootstrap over items and repetitions is not used in v0.4.0.
+
+### Variance components and a two-level CI (v0.5.0)
+
+For groups with two or more repetitions, each metric in the variability analysis also has a
+`variance_components` section:
+
+- `sigma2_item` and `sigma2_repetition`: how much scores vary between questions and between
+  re-runs of the same question (ANOVA estimates on items valid in every repetition);
+- `summary`: a plain sentence, for example "Re-running explains 8% of the variation in scores;
+  the choice of questions explains 92%.";
+- `two_level_confidence_interval`: a CI for the mean that resamples questions and then
+  repetitions within each question, shown next to the usual question-level CI.
+
+If re-running explains a large share, run more repetitions; if questions do, add questions.
+See [statistical_methodology.md](statistical_methodology.md), section 20.

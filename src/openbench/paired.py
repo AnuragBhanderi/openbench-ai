@@ -54,6 +54,7 @@ from openbench.stats import (
     tost_bootstrap_t,
     tost_paired_binary_exact,
 )
+from openbench.stats.bernstein import tost_empirical_bernstein
 from openbench.stats.bootstrap import DEFAULT_RESAMPLES
 from openbench.stats.effects import TIE_TOLERANCE
 from openbench.stats.tests import DEFAULT_EXACT_PERMUTATION_MAX, DEFAULT_PERMUTATIONS
@@ -208,6 +209,9 @@ class ComparisonArm:
         )
 
 
+CONTINUOUS_EQUIVALENCE_METHODS = ("descriptive", "empirical_bernstein")
+
+
 @dataclass(frozen=True)
 class ComparisonPolicy:
     """Analysis parameters (all recorded in the output)."""
@@ -229,8 +233,13 @@ class ComparisonPolicy:
     baseline: str | None = None
     selected_ids: tuple[str, ...] | None = None
     tie_tolerance: float = TIE_TOLERANCE
+    #: v0.5.0 (#20): "descriptive" keeps the v0.4.0 bootstrap-t TOST (never a claim);
+    #: "empirical_bernstein" uses the finite-sample bounded TOST, which can establish equivalence.
+    continuous_equivalence: str = "descriptive"
 
     def __post_init__(self) -> None:
+        if self.continuous_equivalence not in CONTINUOUS_EQUIVALENCE_METHODS:
+            raise ConfigurationError(f"continuous_equivalence must be one of {CONTINUOUS_EQUIVALENCE_METHODS}")
         if self.missing_policy not in MISSING_POLICIES:
             raise ConfigurationError(f"missing_policy must be one of {MISSING_POLICIES}")
         if self.correction not in CORRECTIONS:
@@ -293,6 +302,8 @@ class ComparisonPolicy:
             ),
             "tie_tolerance": self.tie_tolerance,
             "small_sample_thresholds": dict(SMALL_SAMPLE_THRESHOLDS),
+            # v0.5.0: written only when changed, so v0.4.0 policies serialise unchanged.
+            **({"continuous_equivalence": self.continuous_equivalence} if self.continuous_equivalence != "descriptive" else {}),
         }
 
 
@@ -842,6 +853,8 @@ class PairedComparisonEngine:
             return tost_paired_binary_exact(counts.b, counts.c, counts.n, margin, policy.alpha)
         if kind == "unknown":
             return _not_established("none", margin, policy.alpha, n, "unsupported_statistical_procedure")
+        if policy.continuous_equivalence == "empirical_bernstein":
+            return tost_empirical_bernstein(diffs, margin, policy.alpha)
         return tost_bootstrap_t(diffs, margin, policy.alpha, analysis_seed=seed_kwargs["analysis_seed"], metric=seed_kwargs["metric"], arm_a=seed_kwargs["arm_a"], arm_b=seed_kwargs["arm_b"])
 
     def _breakdown(self, rows, key, metric, base, chal, policy, inferential: bool) -> dict[str, Any]:

@@ -34,6 +34,7 @@ from openbench.itemscores import (
 )
 from openbench.stats._numeric import stdev as exact_stdev
 from openbench.stats.bootstrap import DEFAULT_RESAMPLES, bootstrap_mean_ci
+from openbench.stats.components import repeated_run_components
 
 SCHEMA_VERSION = "0.4.0"
 
@@ -288,6 +289,22 @@ def decompose_variability(
             "by_difficulty": _breakdown(entries, "difficulty", binary),
             "per_item": entries,
         }
+        if repetitions >= 2:
+            # v0.5.0 (#45): item vs repetition variance and a two-level CI, on complete cases.
+            complete = [
+                obs.valid_values for obs in observations.values()
+                if obs.in_universe and obs.repetitions_used == repetitions
+            ]
+            components = repeated_run_components(
+                complete,
+                confidence_level=confidence_level,
+                resamples=resamples,
+                analysis_seed=analysis_seed,
+                metric=metric,
+                arm=arm_label,
+            )
+            components["items_used_complete_cases"] = len(complete)
+            per_metric[metric]["variance_components"] = components
     assert shared_obs is not None
     from openbench.provenance import provenance_block
 

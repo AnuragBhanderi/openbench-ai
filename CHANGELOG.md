@@ -14,6 +14,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Windows and macOS CI** (#7) and a **weekly real-model workflow** (#16, `scripts/real_model_check.py`), which stays off until the `OPENBENCH_REAL_MODEL_CI` repository variable is set.
 - `openbench --version` shows the Python version and platform (#38); the main commands' `--help` ends with examples (#39).
 
+### Added (Milestone 2: Statistics and judges)
+- **`openbench rank`** (#33): ranks several runs, repeat groups or evaluation files with simultaneous rank intervals from Holm-corrected pairwise tests, "tied with top" flags and a descriptive bootstrap share of first places.
+- **`openbench plan`** (#34): sample size or smallest detectable difference, with exact power for the McNemar test (normal approximation above 3,000 items), inputs from the disagreement rate, the baseline accuracy or two pilot runs; normal-approximation planning for continuous metrics.
+- **Variance components** (#45): repeated-run analyses report item and repetition variance, the share of variation from re-running, and a two-level bootstrap CI beside the question-level CI.
+- **`openbench judge`** (#19): pairwise LLM-as-judge that judges both display orders, scores inconsistent pairs as ties, and reports position consistency, position bias, length bias, self-preference risk and agreement with human annotations. Judge calls are cached, retried and rate-limited.
+- **Metric–human agreement** (#46): `openbench preferences analyze --compare-metric NAME` reports percent agreement, Cohen's kappa and a confusion table against the human majority.
+- **Bounded equivalence for continuous metrics** (#20): `openbench analyze --continuous-equivalence empirical_bernstein` adds an opt-in TOST with a finite-sample guarantee (empirical Bernstein bounds). It passed all 150 cells of the v0.4.0 calibration grid; the v0.4.0 bootstrap-t stays descriptive.
+- Calibration studies for all new methods: `tests/reference/_ref_v050_calibration.py`, results in `tests/reference/data/v050_calibration_results.json`, documented in `docs/statistical_methodology.md` sections 18–22.
+- A test that a one-item stratum stays descriptive with `--stratum-tests` (#30).
+
 ### Changed
 - `openbench runs list` prints a compact aligned table; `--wide` restores the previous one-line-per-run format (#4).
 

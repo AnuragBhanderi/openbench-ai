@@ -363,6 +363,10 @@ def render_preferences(payload: dict[str, Any], fmt_name: str) -> str:
         lines += ["", "## Elo (optional, relative)", ""]
         lines += _table(["Model", "Rating", "Comparisons"], [[m, fmt(r, 1), e["comparisons_per_model"][m]] for m, r in e["ratings"].items()])
         lines += ["", f"_{e['limitations']}_"]
+    if p.get("metric_agreement"):
+        from openbench.reporting_v050 import render_agreement_md
+
+        lines += [""] + render_agreement_md(p["metric_agreement"])
     lines += ["", "## Methodology", ""] + [f"- {k.replace('_', ' ')}: {v}" for k, v in p["methodology"].items()]
     lines += [""] + _provenance_md(p.get("provenance"))
     return "\n".join(lines).rstrip() + "\n"
