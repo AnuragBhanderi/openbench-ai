@@ -1,10 +1,10 @@
 <div align="center">
 
-# OpenBench AI (v0.4.0)
+# OpenBench AI (v0.5.0)
 
 **Is the difference between two LLMs real, or noise?**
 
-Statistically sound LLM benchmarking in Python: repeated runs, paired model comparison with confidence intervals and exact tests, blinded human preference evaluation and dataset quality audits. No runtime dependencies.
+Statistically sound LLM benchmarking in Python: any model, paired comparison and ranking with confidence intervals and exact tests, sample-size planning, repeated runs, blinded human preferences, an LLM judge you can measure, and dataset audits. No runtime dependencies.
 
 [![Tests](https://github.com/lakshaychhaba0001-sys/openbench-ai/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/lakshaychhaba0001-sys/openbench-ai/actions/workflows/tests.yml)
 [![Release](https://img.shields.io/github/v/release/lakshaychhaba0001-sys/openbench-ai?color=2ea44f)](https://github.com/lakshaychhaba0001-sys/openbench-ai/releases/latest)
@@ -23,11 +23,14 @@ Most model comparisons report two averages and pick the higher one. On a benchma
 
 | You want to know | OpenBench AI gives you |
 | --- | --- |
+| Which of these models should we ship? | `openbench rank`: several models ranked with rank intervals and "tied with top" flags. |
+| How many questions do I need? | `openbench plan`: exact sample sizes for the paired test, or what a given number of items can detect. |
 | Is model B really better than model A? | `openbench analyze`: item-by-item pairing, bootstrap confidence intervals, an exact McNemar or sign-flip test, Holm or BH correction, and effect sizes. A non-significant result is never reported as "equivalent". |
 | How much do scores move between runs? | `openbench run --repetitions N --seed S`: repeat groups with full lineage. Within-item noise, item spread and failures are reported separately. |
 | Which answers do people prefer? | `openbench preferences`: blinded A/B task files, validated annotations, clustered win rates, position bias and inter-annotator agreement. |
-| Can I trust the dataset and the runs? | `--quality-checks`: read-only audits for duplicates, near-duplicates, broken references, incomplete runs and integrity failures. |
-| Can someone else check my numbers? | JSON, Markdown and CSV reports with provenance: input SHA-256s, seeds, parameters and environment. |
+| Can I trust an LLM judge? | `openbench judge`: both display orders, position and length bias checks, and agreement with people. |
+| Can I trust the dataset and the runs? | `--quality-checks`, `audit-contamination`, `dataset-card`: read-only audits for duplicates (lexical or semantic), overlap with a corpus, broken references, incomplete runs and integrity failures. |
+| Can someone else check my numbers? | JSON, Markdown, CSV and self-contained HTML reports with provenance (input SHA-256s, seeds, parameters, environment), and a read-only local dashboard (`openbench serve`). |
 
 Try the whole workflow in under a minute, with no API keys and no network:
 
@@ -37,11 +40,26 @@ python -m pip install -e .
 python examples/v040_workflow.py demo   # writes comparison, variability, preference and audit reports to demo/
 ```
 
-> **Note**: OpenBench AI is maintained by its project owner, and its initial development was AI-assisted. Contributions, bug reports, and new datasets are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md), the [good first issues](https://github.com/lakshaychhaba0001-sys/openbench-ai/labels/good%20first%20issue) and the [v0.5.0 roadmap](ROADMAP.md).
+> **Note**: OpenBench AI is maintained by its project owner, and its initial development was AI-assisted. Contributions, bug reports, and new datasets are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md), the [good first issues](https://github.com/lakshaychhaba0001-sys/openbench-ai/labels/good%20first%20issue) and the [roadmap](ROADMAP.md).
 
 ---
 
-## What's new in v0.4.0
+## What's new in v0.5.0
+
+- **Any model.** `--provider openai_compatible` runs any server with a `/v1/chat/completions` endpoint: vLLM, LM Studio, llama.cpp server or a hosted API. The API key is read from an environment variable and never stored. `--max-requests-per-minute` and `Retry-After` handling keep hosted runs under rate limits. ([providers](docs/providers.md))
+- **Rank several models**: `openbench rank` gives rank intervals from Holm-corrected pairwise tests, so you can see which models the data can tell apart. ([ranking and planning](docs/ranking_and_planning.md))
+- **Plan before you run**: `openbench plan` computes exact sample sizes for the paired McNemar test, from a disagreement rate, a baseline accuracy or two pilot runs.
+- **An LLM judge you can measure**: `openbench judge` judges both display orders and reports position consistency, position and length bias, self-preference risk and agreement with human annotations. `preferences analyze --compare-metric` checks any metric against people. ([LLM judge](docs/llm_judge.md))
+- **Variance components**: repeat-group analyses say how much of the variation comes from re-running and how much from the choice of questions, with a two-level CI.
+- **Equivalence for continuous metrics**: an opt-in bounded test (`--continuous-equivalence empirical_bernstein`) with a finite-sample guarantee.
+- **Benchmarks you can trust**: `import-dataset` converts local QA and multiple-choice files; `audit-contamination` checks overlap with a corpus you supply; `dataset-card` writes a card; `--near-duplicate-method semantic` finds paraphrases. ([benchmark tools](docs/benchmark_tools.md))
+- **Results anyone can read**: `--format html` writes one self-contained, escaped report; `openbench serve` is a read-only local dashboard. ([HTML reports and dashboard](docs/dashboard.md))
+- **A platform others build on**: plugins for metrics, providers and dataset sources ([plugins](docs/plugins.md)); Windows and macOS in CI; cross-process cache locking; a [documentation site](mkdocs.yml); and a [troubleshooting page](docs/troubleshooting.md).
+
+Every new statistical method has reference tests and a committed calibration study ([methodology](docs/statistical_methodology.md), sections 18–22). v0.4.0 commands, public Python names, run directories, datasets and scores keep working, and the core install still has no runtime dependencies. See the [changelog](CHANGELOG.md).
+
+<details>
+<summary>What was new in v0.4.0</summary>
 
 - **Repeated-run benchmarking**: `openbench run --repetitions N --seed S` creates a *repeat group*. Each repetition is its own run with recorded lineage: group ID, repetition index, seeds and seed status, the exact record IDs, per-record content hashes, and cache provenance.
 - **Interrupted groups resume** without re-requesting completed items (`openbench runs resume grp_...`).
@@ -66,6 +84,8 @@ python examples/v040_workflow.py demo   # writes comparison, variability, prefer
 - **Opt-in evaluation CIs**: `openbench evaluate --confidence-intervals`. Output is unchanged without the flag.
 
 v0.3.1 commands, flags, public Python names, the 200 dataset records and existing scores are preserved, and v0.3.1 run directories can be read without modification. See the [migration guide](V0_4_0_MIGRATION_GUIDE.md) for the details and the few documented behaviour changes.
+
+</details>
 
 ---
 
@@ -150,6 +170,14 @@ openbench preferences analyze --key private/tasks.key.json --annotations annotat
 openbench validate-dataset datasets/ --quality-checks --format markdown --output results/dataset_audit.md
 ```
 
+### 6. Rank, plan and share (v0.5.0)
+
+```bash
+openbench rank --runs run_<a> run_<b> grp_<c> --metric exact_match --format html --output results/ranking.html
+openbench plan --baseline-accuracy 0.7 --difference 0.05
+openbench serve --experiments-dir experiments --reports-dir results
+```
+
 A complete runnable walkthrough using the mock provider is in [`examples/v040_workflow.py`](examples/v040_workflow.py).
 
 ---
@@ -163,7 +191,11 @@ A complete runnable walkthrough using the mock provider is in [`examples/v040_wo
 | `run`, `runs list/show/verify/resume/compare` | Provider execution, repeat groups, run management and integrity |
 | `providers list/check`, `cache stats/clear` | Providers and the response cache |
 | `analyze` | v0.4.0 paired comparison or repeated-run variability of stored results |
-| `preferences create/validate/analyze` | v0.4.0 blinded pairwise human preference evaluation |
+| `preferences create/validate/analyze` | v0.4.0 blinded pairwise human preference evaluation (`--compare-metric` in v0.5.0) |
+| `rank`, `plan` | v0.5.0 ranking with uncertainty; sample-size planning |
+| `judge` | v0.5.0 pairwise LLM-as-judge with bias checks |
+| `import-dataset`, `audit-contamination`, `dataset-card` | v0.5.0 benchmark import, contamination risk, dataset cards |
+| `serve`, `metrics list`, `plugins list` | v0.5.0 read-only dashboard; metric and plugin listings |
 
 See the [CLI reference](docs/cli_reference.md) for every flag.
 
@@ -243,8 +275,8 @@ If you use OpenBench AI in your research, please cite it using the following Bib
 @software{chhaba2026openbench,
   author  = {Chhaba, Lakshay},
   title   = {OpenBench AI},
-  version = {0.4.0},
-  date    = {2026-11-10},
+  version = {0.5.0},
+  date    = {2026-11-15},
   url     = {https://github.com/lakshaychhaba0001-sys/openbench-ai},
   license = {MIT}
 }

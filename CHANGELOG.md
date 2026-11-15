@@ -4,7 +4,9 @@ All notable changes to **OpenBench AI** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-11-15
+
+All of the [v0.5.0 roadmap](ROADMAP.md) themes, in four milestones. No breaking changes: v0.4.0 commands, public Python names, run directories, datasets and scores keep working, and the core install has no runtime dependencies.
 
 ### Added (Milestone 1: Foundations)
 - **OpenAI-compatible adapter** (`openai_compatible`, aliases `openai`, `openai-compatible`; #8): runs any server with `/v1/chat/completions` (vLLM, LM Studio, llama.cpp server, hosted APIs). Standard library only; forwards seeds; records token usage; reads the API key from an environment variable at request time and never stores it.
@@ -34,6 +36,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 - `openbench runs list` prints a compact aligned table; `--wide` restores the previous one-line-per-run format (#4).
+
+### Added (Milestone 4: Documentation and release)
+- **Documentation site** (#49): `mkdocs.yml` (MkDocs Material, optional `docs` extra), a strict build in CI, and a GitHub Pages workflow that stays off until the `OPENBENCH_DOCS_PAGES` repository variable is `true`.
+- **Troubleshooting page** (#41) with real error messages and fixes.
+- `openbench run` prints the first failure reason when items fail.
+- A test that no text file in the repository starts with a UTF-8 byte-order mark.
 
 ### Fixed
 - The closed-pipe handler closes its duplicated file descriptor and copes with a stdout that has no file descriptor (#6).

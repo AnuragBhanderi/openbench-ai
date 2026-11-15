@@ -1311,6 +1311,18 @@ def _handle_run(args: argparse.Namespace) -> int:
         repeat_count = args.repetitions
     base_seed = args.seed if getattr(args, "seed", None) is not None else gen_cfg.seed
 
+    def _first_error(rec) -> str | None:
+        """v0.5.0: the first failure reason recorded in the run's logs, for the console."""
+        logs = Path(rec.run_dir) / "logs.jsonl"
+        try:
+            for line in logs.read_text(encoding="utf-8").splitlines():
+                entry = json.loads(line) if line.strip() else {}
+                if entry.get("event") == "failed":
+                    return f"[{entry.get('error_type')}] {entry.get('error_message')}"
+        except (OSError, json.JSONDecodeError):
+            return None
+        return None
+
     def _report(rec) -> None:
         group_note = (
             f" [group {rec.repeat_group_id} repetition {rec.repetition_index + 1}/{repeat_count}]"
@@ -1321,6 +1333,10 @@ def _handle_run(args: argparse.Namespace) -> int:
             f"Run '{rec.run_id}' [{rec.status}]{group_note}: {rec.completed_items}/{rec.total_items} completed "
             f"(provider={rec.model_provider}, model={rec.model_name}, scores={rec.aggregate_scores}) -> {rec.run_dir}"
         )
+        if rec.failed_items:
+            reason = _first_error(rec)
+            if reason:
+                print(f"  {rec.failed_items} item(s) failed. First error: {reason}", file=sys.stderr)
 
     group = manager.execute_repeated(
         dataset=dataset,

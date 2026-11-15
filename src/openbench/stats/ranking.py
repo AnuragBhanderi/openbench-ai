@@ -129,7 +129,7 @@ def rank_models(
         p_adj = adjusted.adjusted[idx] if adjusted else 1.0
         tests[idx]["adjusted_p_value"] = p_adj
         diff = tests[idx]["mean_difference_b_minus_a"] or 0.0
-        significant = p_adj < alpha and diff != 0.0
+        significant = p_adj <= alpha and diff != 0.0  # same rule as `openbench analyze`
         tests[idx]["significant"] = significant
         if significant:
             if diff > 0:

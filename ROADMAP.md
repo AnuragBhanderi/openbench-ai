@@ -1,5 +1,7 @@
 # OpenBench AI roadmap: v0.5.0
 
+> **Status: complete.** Every theme below is implemented. The work is in the four milestone pull requests linked from [#24](https://github.com/lakshaychhaba0001-sys/openbench-ai/issues/24); see the [changelog](CHANGELOG.md) for details. The [next steps](#after-v050) are at the end of this page.
+
 **Goal:** a team can go from "we have three candidate models" to a shareable, statistically defensible decision report in one afternoon, on their own hardware or any hosted API.
 
 v0.4.0 answers one question well: *is the gap between two models real?* v0.5.0 widens that to the questions teams face every week:
@@ -59,6 +61,28 @@ v0.5.0 ships only when all of these pass on GitHub Actions:
 - **Determinism:** analysis output is identical across Python 3.10–3.13 and across Linux, Windows and macOS.
 - **Security:** secrets are scrubbed everywhere, HTML output is escaped, the dashboard listens on localhost only, and plugins are documented as trusted code.
 - **Real models:** the weekly real-model workflow has passed three times in a row.
+
+## Release gate status
+
+| Gate | Status |
+| --- | --- |
+| No breaking changes | All v0.4.0 tests pass unchanged except the three that pin the version number. |
+| Dependencies | The core install has no runtime dependencies; MkDocs is in the optional `docs` extra. |
+| Checked statistics | Reference tests and a committed calibration study for every new method ([methodology](docs/statistical_methodology.md), sections 18–22). One two-level CI cell missed its threshold and is reported with a documented follow-up. |
+| Determinism | CI runs the suite on Python 3.10–3.13 (Linux) and on Windows and macOS. |
+| Security | API keys stay in environment variables; HTML is escaped with a script-blocking CSP; the dashboard is read-only and local by default; plugins are documented as trusted code. |
+| Real models | The weekly real-model workflow is built and tested with the mock provider. It runs once the `OPENBENCH_REAL_MODEL_CI` repository variable is set; three passing runs are still to come. |
+
+## After v0.5.0
+
+No dates; work lands when it is ready.
+
+- **Agent and multi-turn evaluation**: tool-using and multi-step tasks, scored per step and per conversation.
+- **Real-model evidence**: switch on the weekly Ollama workflow and publish a worked tutorial with real models ([#15](https://github.com/lakshaychhaba0001-sys/openbench-ai/issues/15)).
+- **Documentation site**: publish it on GitHub Pages (the workflow is ready).
+- **Community datasets**: more categories, such as data extraction ([#9](https://github.com/lakshaychhaba0001-sys/openbench-ai/issues/9)).
+
+Ideas and requests are welcome in [Discussions](https://github.com/lakshaychhaba0001-sys/openbench-ai/discussions).
 
 ## How to help
 
