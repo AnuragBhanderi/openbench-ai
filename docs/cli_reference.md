@@ -15,6 +15,9 @@ Validate a JSONL dataset file or directory of JSONL files.
 | `--format` |  | `json` | `json`, `markdown`, `csv` | *(v0.4.0)* audit report format. |
 | `--near-duplicate-threshold` |  | `0.85` |  | *(v0.4.0)* DQ003 Jaccard threshold. |
 | `--metrics` |  |  |  | *(v0.4.0)* metric names to check (DQ008). |
+| `--near-duplicate-method` |  | `lexical` | `lexical`, `semantic` | v0.5.0: 'semantic' adds an embedding pass that finds paraphrases (needs the 'semantic' extra). |
+| `--embedding-model` |  | `sentence-transformers/all-MiniLM-L6-v2` |  | v0.5.0: local sentence-transformers model for --near-duplicate-method semantic. |
+| `--semantic-threshold` |  | `0.9` |  | v0.5.0: cosine threshold for semantic DQ003. |
 
 ## `openbench evaluate`
 
@@ -216,7 +219,7 @@ v0.5.0: rank several stored runs, repeat groups or evaluation files with uncerta
 | `--seed` |  | `0` |  |  |
 | `--exploratory` |  |  |  | Rank inputs that fail hard compatibility checks (descriptive only). |
 | `--output` |  |  |  |  |
-| `--format` |  | `markdown` | `json`, `markdown`, `csv` |  |
+| `--format` |  | `markdown` | `json`, `markdown`, `csv`, `html` |  |
 
 ## `openbench plan`
 
@@ -264,6 +267,61 @@ v0.5.0: pairwise LLM-as-judge with order swapping and bias checks.
 | `--resamples` |  | `10000` |  |  |
 | `--output` |  |  |  |  |
 | `--format` |  | `markdown` | `json`, `markdown`, `csv` |  |
+
+## `openbench import-dataset`
+
+v0.5.0: convert a local benchmark file (QA or multiple choice) into an OpenBench JSONL dataset.
+
+| Argument | Required | Default | Choices | Help |
+| :--- | :---: | :--- | :--- | :--- |
+| `input` | yes |  |  |  |
+| `--format` | yes |  | `qa-jsonl`, `qa-csv`, `mcq-jsonl`, `mcq-csv` |  |
+| `--category` | yes |  |  |  |
+| `--output` | yes |  |  |  |
+| `--id-prefix` |  |  |  |  |
+| `--source` |  |  |  | Where the benchmark comes from (recorded in metadata). |
+| `--license` |  |  |  | The benchmark's licence (recorded in metadata). |
+| `--difficulty` |  |  | `easy`, `medium`, `hard` |  |
+| `--question-field` |  | `question` |  |  |
+| `--answer-field` |  | `answer` |  |  |
+| `--id-field` |  | `id` |  |  |
+| `--overwrite` |  |  |  |  |
+
+## `openbench audit-contamination`
+
+v0.5.0: read-only check of word n-gram overlap between a dataset and a reference corpus.
+
+| Argument | Required | Default | Choices | Help |
+| :--- | :---: | :--- | :--- | :--- |
+| `dataset_path` | yes |  |  |  |
+| `--corpus` | yes |  |  | A text, Markdown, JSON, JSONL or CSV file, or a directory of them. |
+| `--ngram` |  | `13` |  |  |
+| `--threshold` |  | `0.5` |  |  |
+| `--min-words` |  | `8` |  |  |
+| `--output` |  |  |  |  |
+| `--format` |  | `markdown` | `json`, `markdown`, `csv` |  |
+
+## `openbench dataset-card`
+
+v0.5.0: generate a dataset card (facts computed from the data, author sections left as TODO).
+
+| Argument | Required | Default | Choices | Help |
+| :--- | :---: | :--- | :--- | :--- |
+| `dataset_path` | yes |  |  |  |
+| `--format` |  | `markdown` | `markdown`, `json` |  |
+| `--output` |  |  |  |  |
+
+## `openbench serve`
+
+v0.5.0: read-only local web dashboard for runs, repeat groups and saved reports.
+
+| Argument | Required | Default | Choices | Help |
+| :--- | :---: | :--- | :--- | :--- |
+| `--experiments-dir` |  | `experiments` |  |  |
+| `--reports-dir` |  |  |  | Directory of saved .json/.html analysis reports. |
+| `--host` |  | `127.0.0.1` |  |  |
+| `--port` |  | `8765` |  |  |
+| `--allow-remote` |  |  |  | Allow listening on a non-loopback address (exposes your results). |
 
 ## `openbench metrics`
 
@@ -359,7 +417,7 @@ v0.4.0: statistically compare stored runs, repeat groups or evaluation files (no
 | `--exploratory` |  |  |  | Descriptive-only comparison of incompatible inputs. |
 | `--exploratory-reason` |  |  |  |  |
 | `--output` |  |  |  |  |
-| `--format` |  | `json` | `json`, `markdown`, `csv` |  |
+| `--format` |  | `json` | `json`, `markdown`, `csv`, `html` | Report format; v0.5.0 adds 'html' (one self-contained file). |
 
 ## `openbench preferences`
 

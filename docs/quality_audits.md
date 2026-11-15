@@ -48,6 +48,15 @@ This is **not semantic duplicate detection**, and a high score is not proof of d
 - A note can only attach a classification to a DQ007 finding, or add a DQ010 or DQ011 finding.
 - Notes never suppress or alter heuristic findings; a test checks this.
 
+### Semantic near-duplicates (v0.5.0)
+
+`--near-duplicate-method semantic` adds an embedding pass (needs the `semantic` extra and a
+local sentence-transformers model) that finds paraphrased prompts the lexical DQ003 check
+misses. The lexical check still runs, each DQ003 finding records its `method`, and the
+parameters list the embedding model and the cosine threshold (`--semantic-threshold`, default
+0.9). See [benchmark_tools.md](benchmark_tools.md), which also covers contamination checks and
+dataset cards.
+
 ## The built-in datasets
 
 The audit of the 200 built-in records gives **0 errors, 6 warnings and 8 info**:
