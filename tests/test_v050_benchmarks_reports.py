@@ -166,6 +166,40 @@ def test_dataset_card_generated_and_placeholders(tmp_path, capsys):
     assert main(["dataset-card", str(ds), "--format", "json"]) == 0
     assert json.loads(capsys.readouterr().out)["kind"] == "dataset_card"
 
+def test_dataset_card_licence_and_source_shared_mixed_missing(tmp_path, capsys):
+    src = tmp_path / "qa.csv"
+    src.write_text("question,answer\nWho wrote Hamlet?,Shakespeare\nCapital of Italy?,Rome\n", encoding="utf-8")
+    shared = tmp_path / "shared.jsonl"
+    assert main(["import-dataset", str(src), "--format", "qa-csv", "--category", "lit", "--license", "CC-BY-4.0",
+                 "--source", "unit test", "--output", str(shared)]) == 0
+    capsys.readouterr()
+    card = build_card(shared)
+    assert card["generated"]["license"] == "CC-BY-4.0" and card["generated"]["source"] == "unit test"
+    md = render_card(card)
+    assert "| Licence | CC-BY-4.0 (all records) |" in md and "| Source | unit test (all records) |" in md
+    assert card["manual"]["source_and_licence"]["text"].startswith("TODO (author): ")
+
+    rows = [
+        {"id": "a", "category": "c", "prompt": "Q one?", "expected_answer": "1", "metadata": {"license": "MIT", "source": "s1"}},
+        {"id": "b", "category": "c", "prompt": "Q two?", "expected_answer": "2", "metadata": {"license": "CC0-1.0"}},
+    ]
+    mixed = tmp_path / "mixed.jsonl"
+    mixed.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    card = build_card(mixed)
+    assert card["generated"]["license"] is None and card["generated"]["source"] is None
+    assert card["generated"]["provenance"]["license"]["distinct"] == ["CC0-1.0", "MIT"]
+    assert card["generated"]["provenance"]["source"] == {"shared": None, "distinct": ["s1"], "records_missing": 1}
+    md = render_card(card)
+    assert "| Licence |" not in md and "| Source |" not in md
+    text = card["manual"]["source_and_licence"]["text"]
+    assert text.startswith("TODO (author): ") and "CC0-1.0, MIT" in text and "s1" in text
+
+    card = build_card(ROOT / "datasets/reasoning/sample.jsonl")
+    assert card["generated"]["license"] is None
+    assert "| Licence |" not in render_card(card)
+    assert card["manual"]["source_and_licence"]["text"].startswith("TODO (author): ")
+
+
 
 # ---------------------------------------------------------------------------------------------
 # HTML reports (#18)

@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from openbench.catalog import DatasetCatalog
+from openbench.dataset import DatasetLoader
 from openbench.quality import DatasetAuditor
 
 PLACEHOLDER = "TODO (author): "
@@ -26,11 +27,37 @@ MANUAL_SECTIONS = (
 )
 
 
+def _provenance(path: str | Path) -> dict[str, dict[str, Any]]:
+    """Report ``metadata.license`` / ``metadata.source`` only as recorded; never guess a value."""
+    records = DatasetLoader.load(path).records
+    out: dict[str, dict[str, Any]] = {}
+    for key in ("license", "source"):
+        values = []
+        for r in records:
+            v = r.metadata.get(key)
+            values.append(v.strip() if isinstance(v, str) and v.strip() else None)
+        distinct = sorted({v for v in values if v is not None})
+        missing = sum(1 for v in values if v is None)
+        shared = distinct[0] if len(distinct) == 1 and missing == 0 else None
+        out[key] = {"shared": shared, "distinct": distinct, "records_missing": missing}
+    return out
+
+
 def build_card(path: str | Path) -> dict[str, Any]:
     stats = DatasetCatalog.compute_stats(path)
     audit = DatasetAuditor().audit(path).to_dict()
     summary = audit["summary"]
     findings = audit["findings"]
+    provenance = _provenance(path)
+    manual = {key: {"title": title, "text": PLACEHOLDER + question} for key, title, question in MANUAL_SECTIONS}
+    found = []
+    for key, label in (("license", "licence"), ("source", "source")):
+        p = provenance[key]
+        if p["shared"] is None:
+            values = ", ".join(p["distinct"]) or "none"
+            found.append(f"{label} values found: {values} ({p['records_missing']} record(s) without one)")
+    if found:
+        manual["source_and_licence"]["text"] += " Records disagree or lack a value: " + "; ".join(found) + "."
     return {
         "schema_version": "0.5.0",
         "kind": "dataset_card",
@@ -44,6 +71,9 @@ def build_card(path: str | Path) -> dict[str, Any]:
             "difficulties": stats["difficulties"],
             "languages": stats["languages"],
             "sources": stats["sources"],
+            "license": provenance["license"]["shared"],
+            "source": provenance["source"]["shared"],
+            "provenance": provenance,
             "prompt_length_chars": stats["prompt_char_length"],
             "answer_length_chars": stats["expected_answer_char_length"],
             "records_with_keywords": stats["records_with_explicit_keywords"],
@@ -59,7 +89,7 @@ def build_card(path: str | Path) -> dict[str, Any]:
                 ][:10],
             },
         },
-        "manual": {key: {"title": title, "text": PLACEHOLDER + question} for key, title, question in MANUAL_SECTIONS},
+        "manual": manual,
         "note": "Generated sections come from the data; sections marked TODO must be written by the dataset author.",
     }
 
@@ -97,6 +127,8 @@ def render_card(card: dict[str, Any], fmt_name: str = "markdown") -> str:
         f"| Prompt length (characters) | min {g['prompt_length_chars']['min']}, mean {g['prompt_length_chars']['avg']}, max {g['prompt_length_chars']['max']} |",
         f"| Answer length (characters) | min {g['answer_length_chars']['min']}, mean {g['answer_length_chars']['avg']}, max {g['answer_length_chars']['max']} |",
         f"| Records with keywords / rationale | {g['records_with_keywords']} / {g['records_with_rationale']} |",
+        *([f"| Licence | {escape_markdown_cell(g['license'])} (all records) |"] if g.get("license") else []),
+        *([f"| Source | {escape_markdown_cell(g['source'])} (all records) |"] if g.get("source") else []),
         "",
         "## Quality checks",
         "",
