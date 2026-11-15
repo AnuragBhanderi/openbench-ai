@@ -12,6 +12,7 @@ from typing import Any
 
 from openbench.evaluator import ResponseItem
 from openbench.exceptions import OpenBenchError
+from openbench.filelock import FileLock
 from openbench.security import redact_sensitive_data
 
 
@@ -86,14 +87,17 @@ class ResponseCache:
       the hashed payload, so repetitions of a group never share entries, independent groups
       never share entries, and resuming repetition i of group G reuses only (G, i) entries.
     - Without a context (single runs) the key is byte-identical to v0.3.1.
-    - The cache is a local file. It is safe for one process at a time; it does not provide
-      cross-process locking or distributed exactly-once execution.
+    - The cache is a local file. Since v0.5.0, loads, appends and clears take an advisory
+      cross-process file lock (``cache_entries.lock``), so several OpenBench processes can share
+      one cache directory without losing or corrupting entries. It is not a distributed
+      exactly-once store: two processes may both generate (and append) the same entry.
     """
 
     def __init__(
         self,
         cache_dir: str | Path | None = None,
         enabled: bool = True,
+        lock_timeout_seconds: float = 30.0,
     ) -> None:
         if cache_dir is not None:
             self.cache_dir = Path(cache_dir)
@@ -106,6 +110,8 @@ class ResponseCache:
         self._memory_map: dict[str, CacheRecord] | None = None
         # Serialises loads, lookups and appends when the execution engine runs concurrently.
         self._lock = threading.RLock()
+        # v0.5.0: cross-process advisory lock around file reads and writes.
+        self._file_lock = FileLock(self.cache_dir / "cache_entries.lock", timeout_seconds=lock_timeout_seconds)
 
     @staticmethod
     def compute_cache_key(
@@ -154,8 +160,9 @@ class ResponseCache:
             self._memory_map = {}
             return self._memory_map
         loaded: dict[str, CacheRecord] = {}
-
-        for line_no, line in enumerate(self._index_path.read_text(encoding="utf-8").splitlines(), start=1):
+        with self._file_lock:
+            text = self._index_path.read_text(encoding="utf-8")
+        for line_no, line in enumerate(text.splitlines(), start=1):
             stripped = line.strip()
             if not stripped:
                 continue
@@ -284,8 +291,10 @@ class ResponseCache:
             store = self._ensure_loaded()
             store[key] = rec
             self.cache_dir.mkdir(parents=True, exist_ok=True)
-            with self._index_path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(rec.to_dict(), ensure_ascii=False) + "\n")
+            line = json.dumps(rec.to_dict(), ensure_ascii=False) + "\n"
+            with self._file_lock, self._index_path.open("a", encoding="utf-8") as fh:
+                fh.write(line)
+                fh.flush()
         return rec
 
     def clear(self) -> int:
@@ -294,14 +303,17 @@ class ResponseCache:
         A corrupted cache file can still be cleared (v0.4.0); the count is then the number of
         non-empty lines.
         """
-        try:
-            count = len(self._ensure_loaded())
-        except OpenBenchError:
-            count = sum(1 for line in self._index_path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip())
-        self._memory_map = {}
-        if self._index_path.exists():
-            self._index_path.unlink()
-        return count
+        with self._lock:
+            try:
+                count = len(self._ensure_loaded())
+            except OpenBenchError:
+                count = sum(1 for line in self._index_path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip())
+            self._memory_map = {}
+            if self._index_path.exists():
+                with self._file_lock:
+                    if self._index_path.exists():
+                        self._index_path.unlink()
+            return count
 
     def stats(self) -> dict[str, Any]:
         """Return cache audit summary."""

@@ -68,7 +68,7 @@ The first 70 names are the unchanged v0.3.1 surface; v0.4.0 only appends names a
 | `compute_percentile` | function | `openbench.performance` | Compute a percentile (0..100) from a non-empty sorted list of floats using linear interpolation. |
 | `create_provider` | function | `openbench.adapters.base` | Instantiate a registered provider adapter by name. |
 | `escape_markdown_cell` | function | `openbench.reporting` | Escape pipe characters (`\|`) and newlines so Markdown table cells remain valid. |
-| `list_registered_providers` | function | `openbench.adapters.base` | Return metadata dictionaries for all unique registered model providers. |
+| `list_registered_providers` | function | `openbench.adapters.base` | Return metadata dictionaries for all unique registered model providers (including plugins). |
 | `load_ids_file` | function | `openbench.dataset` | Load and validate an ID filter file (plain text with one ID per line, or a JSON array of IDs). |
 | `redact_prompt_if_private` | function | `openbench.security` | Mask prompt or response text in logs when configurable `privacy_mode=True` is active. |
 | `redact_sensitive_data` | function | `openbench.security` | Recursively redact sensitive keys and string-embedded credentials across dicts, lists, and strings. |

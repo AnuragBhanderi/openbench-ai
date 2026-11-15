@@ -60,6 +60,11 @@ def create_metric(
     """Instantiate a registered metric by name with optional metric-specific parameters."""
     key = name.strip().lower()
     if key not in METRIC_REGISTRY:
+        # v0.5.0: an unknown name may come from an installed plugin.
+        from openbench.plugins import load_plugins
+
+        load_plugins("metrics")
+    if key not in METRIC_REGISTRY:
         available = sorted({m.name for m in METRIC_REGISTRY.values()})
         raise MetricError(
             f"Unknown metric '{name}'. Available metrics: {', '.join(available)}"
@@ -89,7 +94,10 @@ def register_metric(metric_cls: type[BaseMetric]) -> None:
 
 
 def list_registered_metrics() -> list[MetricMetadata]:
-    """Return sorted MetricMetadata objects for all unique registered metrics."""
+    """Return sorted MetricMetadata objects for all unique registered metrics (including plugins)."""
+    from openbench.plugins import load_plugins
+
+    load_plugins("metrics")
     unique_classes = {cls.name: cls for cls in METRIC_REGISTRY.values()}
     return [unique_classes[name].get_metadata() for name in sorted(unique_classes)]
 

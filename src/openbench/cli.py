@@ -12,7 +12,9 @@ from typing import Any
 
 from openbench import __version__
 from openbench.adapters import (
+    DEFAULT_API_KEY_ENV,
     DEFAULT_OLLAMA_ENDPOINT,
+    DEFAULT_OPENAI_COMPATIBLE_ENDPOINT,
     GenerationConfig,
     create_provider,
     list_registered_providers,
@@ -44,6 +46,17 @@ def _slugify(value: str) -> str:
     return slug or "model"
 
 
+def _version_string() -> str:
+    """One-line version for bug reports: OpenBench, Python and platform (v0.5.0)."""
+    import platform
+
+    return f"openbench {__version__} (Python {platform.python_version()}, {platform.platform(terse=True)})"
+
+
+def _examples(*lines: str) -> str:
+    return "examples:\n" + "\n".join(f"  {line}" for line in lines)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Construct the OpenBench AI CLI argument parser (preserving all v0.1.0 & v0.2.0 commands + v0.3.0 commands)."""
     parser = argparse.ArgumentParser(
@@ -53,7 +66,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--version",
         action="version",
-        version=f"openbench {__version__}",
+        version=_version_string(),
         help="Show the OpenBench AI version and exit.",
     )
 
@@ -83,6 +96,11 @@ def build_parser() -> argparse.ArgumentParser:
     eval_parser = subparsers.add_parser(
         "evaluate",
         help="Evaluate one or more pre-generated model response files against a dataset or YAML profile.",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_examples(
+            'openbench evaluate --dataset datasets/reasoning/sample.jsonl --responses examples/sample_responses.json',
+            'openbench evaluate --dataset datasets/reasoning/sample.jsonl --responses examples/sample_responses.json --metrics exact_match f1 --output results/',
+        ),
     )
     eval_parser.add_argument(
         "--dataset",
@@ -237,6 +255,12 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser = subparsers.add_parser(
         "run",
         help="Execute a model provider against a dataset, evaluate metrics, and create a verifiable experiment run.",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_examples(
+            'openbench run --dataset datasets/reasoning/sample.jsonl --provider mock --model demo',
+            'openbench run --dataset datasets/reasoning/sample.jsonl --provider ollama --model llama3.2 --repetitions 3 --seed 7',
+            'openbench run --dataset datasets/reasoning/sample.jsonl --provider openai_compatible --endpoint http://localhost:8000/v1 --model my-model',
+        ),
     )
     run_parser.add_argument(
         "--config",
@@ -287,6 +311,19 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Number of concurrent model requests (default: 1).",
+    )
+    run_parser.add_argument(
+        "--max-requests-per-minute",
+        type=float,
+        default=None,
+        help="v0.5.0: limit provider requests per minute across all workers (for hosted APIs).",
+    )
+    run_parser.add_argument(
+        "--api-key-env",
+        type=str,
+        default=None,
+        help="v0.5.0: environment variable holding the API key for openai_compatible "
+        "(default: OPENAI_API_KEY). The key itself is never stored.",
     )
     run_parser.add_argument(
         "--timeout",
@@ -365,6 +402,11 @@ def build_parser() -> argparse.ArgumentParser:
     runs_list_p.add_argument(
         "--group", type=str, default=None, help="v0.4.0: list only the runs of this repeat group."
     )
+    runs_list_p.add_argument(
+        "--wide",
+        action="store_true",
+        help="v0.5.0: print the full one-line-per-run format (all scores, origin, dataset).",
+    )
 
     runs_show_p = runs_subparsers.add_parser("show", help="Inspect a specific experiment run.")
     runs_show_p.add_argument("run_id", type=str)
@@ -400,6 +442,16 @@ def build_parser() -> argparse.ArgumentParser:
     runs_compare_p.add_argument("--output", type=str, default=None)
     runs_compare_p.add_argument("--format", choices=["text", "json", "markdown"], default="text")
 
+    # v0.5.0: metrics and plugins listings
+    met_parser = subparsers.add_parser("metrics", help="v0.5.0: list built-in and plugin metrics.")
+    met_sub = met_parser.add_subparsers(dest="metrics_action")
+    met_list = met_sub.add_parser("list", help="List registered metrics and where they come from.")
+    met_list.add_argument("--format", choices=["text", "json"], default="text")
+    plug_parser = subparsers.add_parser("plugins", help="v0.5.0: list installed OpenBench plugins.")
+    plug_sub = plug_parser.add_subparsers(dest="plugins_action")
+    plug_list = plug_sub.add_parser("list", help="Discover and list installed plugins (this imports them).")
+    plug_list.add_argument("--format", choices=["text", "json"], default="text")
+
     # 11. providers (v0.3.0 new: list, check)
     prov_parser = subparsers.add_parser(
         "providers",
@@ -434,6 +486,12 @@ def build_parser() -> argparse.ArgumentParser:
         "analyze",
         help="v0.4.0: statistically compare stored runs, repeat groups or evaluation files "
         "(no provider calls), or analyse one repeat group's variability.",
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_examples(
+            'openbench analyze --runs run_<baseline> grp_<challenger> --format markdown --output comparison.md',
+            'openbench analyze --runs grp_<id>    # variability of one repeat group',
+            'openbench analyze --results eval_a.json eval_b.json --metrics exact_match --equivalence-margin 0.05',
+        ),
     )
     ana_src = ana_parser.add_mutually_exclusive_group(required=True)
     ana_src.add_argument("--runs", nargs="+", default=None, help="Run IDs (run_...) or repeat group IDs (grp_...).")
@@ -464,7 +522,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="v0.4.0: local blinded pairwise human preference evaluation.",
     )
     pref_sub = pref_parser.add_subparsers(dest="preferences_action")
-    pc = pref_sub.add_parser("create", help="Create blind A/B tasks (tasks.jsonl) and a separate key file.")
+    pc = pref_sub.add_parser(
+        "create",
+        help="Create blind A/B tasks (tasks.jsonl) and a separate key file.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_examples(
+            'openbench preferences create --runs run_<a> run_<b> --output prefs/',
+            'openbench preferences create --results eval_a.json eval_b.json --output prefs/ --csv --show-reference',
+        ),
+    )
     pc_src = pc.add_mutually_exclusive_group(required=True)
     pc_src.add_argument("--runs", nargs=2, default=None, metavar=("RUN_A", "RUN_B"))
     pc_src.add_argument("--results", nargs=2, default=None, metavar=("EVAL_A", "EVAL_B"))
@@ -511,6 +577,21 @@ def _instantiate_provider_from_args_or_profile(
             model_name=model_name,
             model_version=model_version,
             endpoint=endpoint or extra_prov_cfg.get("endpoint", DEFAULT_OLLAMA_ENDPOINT),
+            generation_config=gen_cfg,
+            timeout_seconds=timeout_seconds,
+            allow_remote_http=bool(extra_prov_cfg.get("allow_remote_http", False)),
+        )
+    if key in {"openai_compatible", "openai", "openai-compatible"}:
+        api_key_env = extra_prov_cfg.get("api_key_env", DEFAULT_API_KEY_ENV)
+        if api_key_env == "[REDACTED]":  # stored runs never keep the variable name
+            api_key_env = DEFAULT_API_KEY_ENV
+        return create_provider(
+            "openai_compatible",
+            model_name=model_name,
+            model_version=model_version,
+            endpoint=endpoint or extra_prov_cfg.get("endpoint", DEFAULT_OPENAI_COMPATIBLE_ENDPOINT),
+            api_key_env=api_key_env,
+            system_prompt=extra_prov_cfg.get("system_prompt"),
             generation_config=gen_cfg,
             timeout_seconds=timeout_seconds,
             allow_remote_http=bool(extra_prov_cfg.get("allow_remote_http", False)),
@@ -948,6 +1029,8 @@ def _handle_run(args: argparse.Namespace) -> int:
         return 2
 
     prov_cfg = dict(profile.provider_config) if profile else {}
+    if getattr(args, "api_key_env", None):
+        prov_cfg["api_key_env"] = args.api_key_env
     provider_name = args.provider or prov_cfg.get("name")
     if not provider_name:
         print(
@@ -997,6 +1080,12 @@ def _handle_run(args: argparse.Namespace) -> int:
         estimate_missing_tokens=base_exec.estimate_missing_tokens,
         privacy_mode=base_exec.privacy_mode,
         pricing=base_exec.pricing,
+        max_requests_per_minute=(
+            args.max_requests_per_minute
+            if getattr(args, "max_requests_per_minute", None) is not None
+            else base_exec.max_requests_per_minute
+        ),
+        max_retry_after_seconds=base_exec.max_retry_after_seconds,
     )
 
     provider = _instantiate_provider_from_args_or_profile(
@@ -1082,6 +1171,42 @@ def _handle_run(args: argparse.Namespace) -> int:
     return 0 if all(r.status == "completed" for r in run_records) else 1
 
 
+def _truncate(text: str, width: int) -> str:
+    return text if len(text) <= width else text[: max(width - 1, 1)] + "…"
+
+
+def _compact_runs_table(runs: list[Any]) -> list[str]:
+    """Aligned table for `openbench runs list` that fits in about 120 columns (v0.5.0)."""
+    header = ("RUN ID", "STATUS", "MODEL", "ITEMS", "SCORE", "GROUP")
+    rows: list[tuple[str, ...]] = []
+    for r in runs:
+        model = f"{r.model_provider}:{r.model_name}" + (" [mock]" if r.is_mock_provider else "")
+        scores = r.aggregate_scores or {}
+        if scores:
+            first = sorted(scores)[0]
+            value = scores[first]
+            score = f"{first}={value:.3f}" if isinstance(value, (int, float)) else f"{first}={value}"
+        else:
+            score = "-"
+        group = f"{r.repeat_group_id}#{r.repetition_index}" if r.repeat_group_id else "-"
+        rows.append(
+            (
+                r.run_id,
+                str(r.status),
+                _truncate(model, 34),
+                f"{r.completed_items}/{r.total_items}",
+                _truncate(score, 24),
+                group,
+            )
+        )
+    widths = [max(len(h), *(len(row[i]) for row in rows)) for i, h in enumerate(header)]
+    fmt = "  ".join(f"{{:<{w}}}" for w in widths)
+    lines = ["  " + fmt.format(*header).rstrip()]
+    lines.extend("  " + fmt.format(*row).rstrip() for row in rows)
+    lines.append("  (SCORE shows the first metric alphabetically; use --wide or --format json for all scores.)")
+    return lines
+
+
 def _handle_runs(args: argparse.Namespace) -> int:
     """Execute `openbench runs list|show|verify|resume|compare`."""
     if not args.runs_action:
@@ -1107,16 +1232,20 @@ def _handle_runs(args: argparse.Namespace) -> int:
             print("No experiment runs found.")
             return 0
         print(f"Experiment Runs ({len(runs)}):")
-        for r in runs:
-            mock_tag = " [MOCK]" if r.is_mock_provider else ""
-            group_tag = (
-                f" | group={r.repeat_group_id}#{r.repetition_index}" if r.repeat_group_id else ""
-            )
-            print(
-                f"  - {r.run_id} | {r.status} | origin={r.execution_origin} | "
-                f"{r.model_provider}:{r.model_name}{mock_tag} | dataset={r.dataset_identifier} "
-                f"({r.completed_items}/{r.total_items}) | scores={r.aggregate_scores}{group_tag}"
-            )
+        if getattr(args, "wide", False):
+            for r in runs:
+                mock_tag = " [MOCK]" if r.is_mock_provider else ""
+                group_tag = (
+                    f" | group={r.repeat_group_id}#{r.repetition_index}" if r.repeat_group_id else ""
+                )
+                print(
+                    f"  - {r.run_id} | {r.status} | origin={r.execution_origin} | "
+                    f"{r.model_provider}:{r.model_name}{mock_tag} | dataset={r.dataset_identifier} "
+                    f"({r.completed_items}/{r.total_items}) | scores={r.aggregate_scores}{group_tag}"
+                )
+            return 0
+        for line in _compact_runs_table(runs):
+            print(line)
         return 0
 
     if args.runs_action == "show":
@@ -1553,6 +1682,9 @@ def _handle_providers(args: argparse.Namespace) -> int:
                 flags.append("mock")
             if p["is_experimental"]:
                 flags.append("experimental")
+            source = p.get("source")
+            if isinstance(source, dict):
+                flags.append(f"plugin: {source.get('distribution') or source.get('entry_point')}")
             flag_str = f" [{', '.join(flags)}]" if flags else ""
             print(f"  - {p['provider_name']}{flag_str}: {p['description']}")
         return 0
@@ -1578,6 +1710,55 @@ def _handle_providers(args: argparse.Namespace) -> int:
         return 0 if health.available else 1
 
     return 2
+
+
+def _handle_metrics(args: argparse.Namespace) -> int:
+    """Execute `openbench metrics list` (v0.5.0)."""
+    from openbench.metrics import METRIC_REGISTRY, list_registered_metrics
+    from openbench.plugins import plugin_source
+
+    if getattr(args, "metrics_action", None) != "list":
+        print("Error: Specify a metrics subcommand ('list').", file=sys.stderr)
+        return 2
+    metas = list_registered_metrics()
+    rows = []
+    for meta in metas:
+        cls = METRIC_REGISTRY.get(meta.name)
+        source = plugin_source(cls) if cls is not None else None
+        rows.append({**meta.to_dict(), "source": source or "built-in"})
+    if args.format == "json":
+        print(json.dumps(rows, indent=2))
+        return 0
+    print(f"Registered Metrics ({len(rows)}):")
+    for row in rows:
+        src = row["source"]
+        tag = f" [plugin: {src.get('distribution') or src.get('entry_point')}]" if isinstance(src, dict) else ""
+        print(f"  - {row['name']}{tag}: {row.get('description', '')}")
+    return 0
+
+
+def _handle_plugins(args: argparse.Namespace) -> int:
+    """Execute `openbench plugins list` (v0.5.0)."""
+    from openbench.plugins import load_plugins, plugins_disabled
+
+    if getattr(args, "plugins_action", None) != "list":
+        print("Error: Specify a plugins subcommand ('list').", file=sys.stderr)
+        return 2
+    infos = [i.to_dict() for i in load_plugins()]
+    if args.format == "json":
+        print(json.dumps({"disabled": plugins_disabled(), "plugins": infos}, indent=2))
+        return 0
+    if plugins_disabled():
+        print("Plugin discovery is disabled (OPENBENCH_DISABLE_PLUGINS is set).")
+        return 0
+    if not infos:
+        print("No OpenBench plugins installed.")
+        return 0
+    print(f"Installed plugins ({len(infos)}):")
+    for i in infos:
+        pkg = f" from {i['distribution']} {i['version']}" if i["distribution"] else ""
+        print(f"  - {i['kind']}: {i['name']} -> {i['entry_point']}{pkg}")
+    return 0
 
 
 def _handle_cache(args: argparse.Namespace) -> int:
@@ -1611,8 +1792,17 @@ def _exit_quietly_after_closed_stdout() -> int:
     """Point stdout at the null device so the interpreter's final flush cannot fail, then exit 1."""
     import os
 
+    try:
+        fileno = sys.stdout.fileno()
+    except (AttributeError, OSError, ValueError):
+        # stdout has no real file descriptor (e.g. replaced by a StringIO); nothing to redirect.
+        return 1
     devnull = os.open(os.devnull, os.O_WRONLY)
-    os.dup2(devnull, sys.stdout.fileno())
+    try:
+        os.dup2(devnull, fileno)
+    finally:
+        # dup2 duplicated the descriptor onto stdout; the original is no longer needed (#6).
+        os.close(devnull)
     return 1
 
 
@@ -1655,6 +1845,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _handle_providers(args)
         if args.command == "cache":
             return _handle_cache(args)
+        if args.command == "metrics":
+            return _handle_metrics(args)
+        if args.command == "plugins":
+            return _handle_plugins(args)
         if args.command == "analyze":
             return _handle_analyze(args)
         if args.command == "preferences":

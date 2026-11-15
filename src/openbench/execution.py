@@ -14,7 +14,7 @@ from openbench.adapters.base import BaseModelAdapter
 from openbench.cache import ResponseCache
 from openbench.dataset import Dataset, DatasetRecord
 from openbench.evaluator import ModelResponseSet, ResponseItem
-from openbench.exceptions import ConfigurationError
+from openbench.exceptions import ConfigurationError, ProviderRateLimitError
 from openbench.performance import (
     PerformanceMonitor,
     PerformanceReport,
@@ -57,6 +57,42 @@ class RetryPolicy:
         }
 
 
+class RequestRateLimiter:
+    """Thread-safe limiter spacing provider requests to at most ``max_requests_per_minute`` (v0.5.0).
+
+    Requests are evenly spaced (one every ``60 / max_requests_per_minute`` seconds) across all
+    concurrent workers, so the limit holds over any one-minute window. ``clock`` and ``sleep``
+    can be injected for deterministic tests.
+    """
+
+    def __init__(
+        self,
+        max_requests_per_minute: float,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        if not max_requests_per_minute or max_requests_per_minute <= 0:
+            raise ConfigurationError("max_requests_per_minute must be positive")
+        self.interval = 60.0 / float(max_requests_per_minute)
+        self._clock = clock
+        self._sleep = sleep
+        self._next_slot: float | None = None
+        self._lock = threading.Lock()
+        self.total_wait_seconds = 0.0
+
+    def acquire(self) -> float:
+        """Block until the next request slot; return the seconds waited."""
+        with self._lock:
+            now = self._clock()
+            slot = now if self._next_slot is None or self._next_slot <= now else self._next_slot
+            self._next_slot = slot + self.interval
+            wait = slot - now
+            self.total_wait_seconds += wait
+        if wait > 0:
+            self._sleep(wait)
+        return wait
+
+
 @dataclass(frozen=True)
 class ExecutionConfig:
     """Configuration for the provider-independent ExecutionEngine."""
@@ -69,15 +105,23 @@ class ExecutionConfig:
     privacy_mode: bool = False
     pricing: PricingConfig | None = None
     request_metadata: dict[str, Any] = field(default_factory=dict)
+    #: v0.5.0: optional limit on provider requests per minute across all workers.
+    max_requests_per_minute: float | None = None
+    #: v0.5.0: longest wait honoured from a provider's ``Retry-After`` header.
+    max_retry_after_seconds: float = 60.0
 
     def __post_init__(self) -> None:
         if self.timeout_seconds <= 0:
             raise ConfigurationError("ExecutionConfig.timeout_seconds must be positive")
         if self.concurrency < 1:
             raise ConfigurationError("ExecutionConfig.concurrency must be at least 1")
+        if self.max_requests_per_minute is not None and self.max_requests_per_minute <= 0:
+            raise ConfigurationError("ExecutionConfig.max_requests_per_minute must be positive")
+        if self.max_retry_after_seconds < 0:
+            raise ConfigurationError("ExecutionConfig.max_retry_after_seconds must not be negative")
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "timeout_seconds": self.timeout_seconds,
             "concurrency": self.concurrency,
             "retry_policy": self.retry_policy.to_dict(),
@@ -87,11 +131,19 @@ class ExecutionConfig:
             "pricing": self.pricing.to_dict() if self.pricing else None,
             "request_metadata": dict(self.request_metadata),
         }
+        # v0.5.0 fields are written only when set, so v0.4.0 configurations serialise unchanged.
+        if self.max_requests_per_minute is not None:
+            payload["max_requests_per_minute"] = self.max_requests_per_minute
+        if self.max_retry_after_seconds != 60.0:
+            payload["max_retry_after_seconds"] = self.max_retry_after_seconds
+        return payload
 
 
 def classify_execution_error(exc: BaseException) -> str:
     """Classify an exception raised during model generation into a standard failure category."""
     msg = str(exc).lower()
+    if isinstance(exc, ProviderRateLimitError):
+        return "rate_limit"
     if isinstance(exc, TimeoutError) or "timed out" in msg or "timeout" in msg:
         return "timeout"
     if "rate limit" in msg or "429" in msg:
@@ -115,6 +167,10 @@ class ExecutionOutcome:
     was_cancelled: bool = False
     started_at: str = ""
     completed_at: str = ""
+    #: v0.5.0: retries made after a provider rate-limit response (HTTP 429).
+    rate_limited_retries: int = 0
+    #: v0.5.0: seconds spent waiting for the requests-per-minute limit.
+    rate_limit_wait_seconds: float = 0.0
 
 
 class ExecutionEngine:
@@ -133,8 +189,13 @@ class ExecutionEngine:
         config: ExecutionConfig | None = None,
         cache: ResponseCache | None = None,
         repetition_context: tuple[str, int] | None = None,
+        sleep_fn: Callable[[float], None] | None = None,
+        clock_fn: Callable[[], float] | None = None,
     ) -> None:
         self.provider = provider
+        # Resolved at call time so tests can patch ``time.sleep`` / ``time.monotonic``.
+        self._sleep: Callable[[float], None] = sleep_fn or (lambda seconds: time.sleep(seconds))
+        self._clock: Callable[[], float] = clock_fn or (lambda: time.monotonic())
         self.config = config or ExecutionConfig()
         #: ``(repeat_group_id, repetition_index)`` for repeat-group runs (v0.4.0); forwarded
         #: to the cache so repetitions never share cached responses.
@@ -169,6 +230,12 @@ class ExecutionEngine:
         lock = threading.Lock()
         in_flight_ids: set[str] = set()
         was_cancelled = False
+        limiter = (
+            RequestRateLimiter(self.config.max_requests_per_minute, clock=self._clock, sleep=self._sleep)
+            if self.config.max_requests_per_minute
+            else None
+        )
+        rate_limited_retries = [0]
 
         # Identify records that already have responses from an earlier interrupted run
         pending_records: list[DatasetRecord] = []
@@ -260,6 +327,8 @@ class ExecutionEngine:
                     if cancel_event is not None and cancel_event.is_set():
                         raise RuntimeError("Execution cancelled by caller")
 
+                    if limiter is not None:
+                        limiter.acquire()
                     call_start = time.perf_counter()
                     try:
                         resp_item = self.provider.generate_one(record)
@@ -350,8 +419,17 @@ class ExecutionEngine:
                             break
                         if attempt < max_attempts:
                             delay = self.config.retry_policy.compute_delay(attempt)
+                            if isinstance(exc, ProviderRateLimitError):
+                                with lock:
+                                    rate_limited_retries[0] += 1
+                                if exc.retry_after_seconds is not None:
+                                    # Honour the provider's Retry-After, capped (v0.5.0).
+                                    delay = min(
+                                        max(exc.retry_after_seconds, 0.0),
+                                        self.config.max_retry_after_seconds,
+                                    )
                             if delay > 0:
-                                time.sleep(delay)
+                                self._sleep(delay)
 
                 clean_err_msg = sanitize_error_message(str(last_error)) if last_error else "Unknown error"
                 telem = RequestTelemetry(
@@ -453,4 +531,6 @@ class ExecutionEngine:
             was_cancelled=was_cancelled,
             started_at=started_at,
             completed_at=completed_at,
+            rate_limited_retries=rate_limited_retries[0],
+            rate_limit_wait_seconds=round(limiter.total_wait_seconds, 6) if limiter else 0.0,
         )

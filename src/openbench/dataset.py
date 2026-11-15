@@ -357,15 +357,23 @@ class DatasetLoader:
         languages: list[str] | None = None,
         ids: list[str] | None = None,
     ) -> Dataset:
-        """Load a dataset from either a single JSONL file or a directory of JSONL files."""
-        target = Path(path)
-        if not target.exists():
-            raise FileNotFoundError(f"Dataset path does not exist: {target}")
+        """Load a dataset from a JSONL file, a directory of JSONL files, or a plugin source.
 
-        if target.is_dir():
-            ds = DatasetLoader.load_directory(target, dataset_name=dataset_name)
+        v0.5.0: ``plugin:<name>[:<argument>]`` loads a dataset from an installed dataset plugin.
+        """
+        if isinstance(path, str) and path.startswith("plugin:") and not Path(path).exists():
+            from openbench.plugins import load_dataset_from_plugin
+
+            ds = load_dataset_from_plugin(path)
         else:
-            ds = DatasetLoader.load_file(target, dataset_name=dataset_name)
+            target = Path(path)
+            if not target.exists():
+                raise FileNotFoundError(f"Dataset path does not exist: {target}")
+
+            if target.is_dir():
+                ds = DatasetLoader.load_directory(target, dataset_name=dataset_name)
+            else:
+                ds = DatasetLoader.load_file(target, dataset_name=dataset_name)
 
         if any(x is not None for x in (categories, difficulties, tags, languages, ids)):
             return ds.filter(

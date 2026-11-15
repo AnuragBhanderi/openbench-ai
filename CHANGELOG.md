@@ -4,6 +4,22 @@ All notable changes to **OpenBench AI** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added (Milestone 1: Foundations)
+- **OpenAI-compatible adapter** (`openai_compatible`, aliases `openai`, `openai-compatible`; #8): runs any server with `/v1/chat/completions` (vLLM, LM Studio, llama.cpp server, hosted APIs). Standard library only; forwards seeds; records token usage; reads the API key from an environment variable at request time and never stores it.
+- **Rate limits** (#32): `--max-requests-per-minute` / `execution.max_requests_per_minute` spaces requests across all workers; HTTP 429 `Retry-After` is honoured, capped by `execution.max_retry_after_seconds`. Counts are recorded in `failure_info` only when they apply.
+- **Plugins** (#31): third-party packages add metrics, providers and dataset sources through the `openbench.metrics`, `openbench.providers` and `openbench.datasets` entry points. Loaded lazily, with clear `PluginError` messages and plugin provenance in runs. New `openbench plugins list` and `openbench metrics list`; `providers list` shows each provider's source. `--dataset plugin:NAME[:ARG]` loads plugin datasets.
+- **Cross-process cache locking** (#17): the response cache takes an advisory file lock, so several processes can share a cache directory.
+- **Windows and macOS CI** (#7) and a **weekly real-model workflow** (#16, `scripts/real_model_check.py`), which stays off until the `OPENBENCH_REAL_MODEL_CI` repository variable is set.
+- `openbench --version` shows the Python version and platform (#38); the main commands' `--help` ends with examples (#39).
+
+### Changed
+- `openbench runs list` prints a compact aligned table; `--wide` restores the previous one-line-per-run format (#4).
+
+### Fixed
+- The closed-pipe handler closes its duplicated file descriptor and copes with a stdout that has no file descriptor (#6).
+
 ## [0.4.0] - 2026-11-10
 
 ### Added

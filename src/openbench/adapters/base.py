@@ -148,17 +148,20 @@ class BaseModelAdapter(ABC):
 
     def reproducibility_metadata(self) -> dict[str, Any]:
         """Return safe reproducibility metadata for reports and cards (with secrets redacted)."""
-        return redact_sensitive_data(
-            {
-                "provider": self.provider_name,
-                "model_name": self.model_name,
-                "model_version": self.model_version,
-                "experimental": self.is_experimental,
-                "is_mock": self.is_mock,
-                "timeout_seconds": self.timeout_seconds,
-                **self.inference_config,
-            }
-        )
+        payload: dict[str, Any] = {
+            "provider": self.provider_name,
+            "model_name": self.model_name,
+            "model_version": self.model_version,
+            "experimental": self.is_experimental,
+            "is_mock": self.is_mock,
+            "timeout_seconds": self.timeout_seconds,
+            **self.inference_config,
+        }
+        # v0.5.0: plugin-provided adapters record their package and version.
+        source = getattr(type(self), "_openbench_plugin_source", None)
+        if isinstance(source, dict):
+            payload["plugin"] = dict(source)
+        return redact_sensitive_data(payload)
 
 
 PROVIDER_REGISTRY: dict[str, type[BaseModelAdapter]] = {}
@@ -179,6 +182,11 @@ def register_provider(adapter_cls: type[BaseModelAdapter], aliases: list[str] | 
 def create_provider(provider_name: str, **kwargs: Any) -> BaseModelAdapter:
     """Instantiate a registered provider adapter by name."""
     key = provider_name.strip().lower()
+    if key not in PROVIDER_REGISTRY:
+        # v0.5.0: an unknown name may come from an installed plugin.
+        from openbench.plugins import load_plugins
+
+        load_plugins("providers")
     if key not in PROVIDER_REGISTRY:
         available = sorted({cls.provider_name for cls in PROVIDER_REGISTRY.values()})
         raise ConfigurationError(
@@ -201,7 +209,10 @@ def create_provider(provider_name: str, **kwargs: Any) -> BaseModelAdapter:
 
 
 def list_registered_providers() -> list[dict[str, Any]]:
-    """Return metadata dictionaries for all unique registered model providers."""
+    """Return metadata dictionaries for all unique registered model providers (including plugins)."""
+    from openbench.plugins import load_plugins, plugin_source
+
+    load_plugins("providers")
     unique: dict[str, type[BaseModelAdapter]] = {}
     for cls in PROVIDER_REGISTRY.values():
         unique[cls.provider_name] = cls
@@ -215,6 +226,7 @@ def list_registered_providers() -> list[dict[str, Any]]:
                 "is_experimental": cls.is_experimental,
                 "is_mock": cls.is_mock,
                 "optional_dependencies": list(cls.optional_dependencies),
+                "source": plugin_source(cls) or "built-in",
             }
         )
     return result

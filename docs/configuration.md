@@ -86,3 +86,21 @@ options:
 ```
 
 See [repeated_runs.md](repeated_runs.md).
+
+## Hosted APIs and rate limits in profiles (v0.5.0)
+
+```yaml
+provider:
+  name: openai_compatible
+  model: my-model
+  endpoint: https://api.example.com/v1
+  api_key_env: MY_PROVIDER_KEY      # the variable's name; the key itself never goes in a profile
+  system_prompt: "Answer with the final answer only."
+
+execution:
+  concurrency: 4
+  max_requests_per_minute: 60       # spread requests evenly across all workers
+  max_retry_after_seconds: 30       # longest Retry-After wait honoured after HTTP 429
+```
+
+See [providers.md](providers.md) and [reliability.md](reliability.md).

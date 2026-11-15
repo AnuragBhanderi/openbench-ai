@@ -1,0 +1,65 @@
+name: Real-model workflow
+
+# Runs the full workflow against a tiny real model through Ollama (issue #16).
+# It never runs on pull requests. The weekly schedule is OFF until the repository variable
+# OPENBENCH_REAL_MODEL_CI is set to "true" (Settings > Secrets and variables > Actions >
+# Variables). It can always be started by hand from the Actions tab.
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"   # Mondays 03:17 UTC
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Ollama model tag"
+        required: false
+        default: "qwen2.5:0.5b"
+
+permissions:
+  contents: read
+
+jobs:
+  real-model:
+    name: Ollama end-to-end (structure checks)
+    if: github.event_name == 'workflow_dispatch' || vars.OPENBENCH_REAL_MODEL_CI == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MODEL: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install OpenBench
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+      - name: Cache Ollama models
+        uses: actions/cache@v4
+        with:
+          path: ~/.ollama/models
+          key: ollama-${{ env.MODEL }}
+      - name: Install and start Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          (ollama serve > ollama.log 2>&1 &)
+          for i in $(seq 1 30); do curl -sf http://localhost:11434/api/tags && break; sleep 2; done
+          ollama --version
+          ollama pull "$MODEL"
+      - name: Run the workflow and check its structure
+        run: |
+          openbench providers check ollama --model "$MODEL"
+          python scripts/real_model_check.py --provider ollama --model "$MODEL" --output real_model_out
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-model-reports
+          path: |
+            real_model_out/comparison.json
+            real_model_out/verify_audit.json
+            real_model_out/preferences/tasks.jsonl
+            ollama.log
+          if-no-files-found: ignore

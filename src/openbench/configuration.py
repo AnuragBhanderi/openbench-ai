@@ -61,6 +61,7 @@ ALLOWED_PROVIDER_KEYS = {
     "use_expected_answer",
     "simulated_latency_ms",
     "api_key_env",
+    "system_prompt",
 }
 ALLOWED_GENERATION_KEYS = {
     "temperature",
@@ -81,6 +82,8 @@ ALLOWED_EXECUTION_KEYS = {
     "backoff_multiplier",
     "max_backoff_seconds",
     "retry_on_timeouts",
+    "max_requests_per_minute",
+    "max_retry_after_seconds",
 }
 ALLOWED_PERFORMANCE_KEYS = {
     "estimate_missing_tokens",
@@ -462,6 +465,12 @@ class ProfileLoader:
             estimate_missing_tokens=estimate_tokens,
             privacy_mode=privacy_mode,
             pricing=pricing_cfg,
+            max_requests_per_minute=(
+                float(exec_raw["max_requests_per_minute"])
+                if exec_raw.get("max_requests_per_minute") is not None
+                else None
+            ),
+            max_retry_after_seconds=float(exec_raw.get("max_retry_after_seconds", 60.0)),
         )
         cache_dir = exec_raw.get("cache_dir")
 
