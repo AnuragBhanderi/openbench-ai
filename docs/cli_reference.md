@@ -198,6 +198,73 @@ Compare two or more experiment runs by their RUN_IDs.
 | `--output` |  |  |  |  |
 | `--format` |  | `text` | `text`, `json`, `markdown` |  |
 
+## `openbench rank`
+
+v0.5.0: rank several stored runs, repeat groups or evaluation files with uncertainty.
+
+| Argument | Required | Default | Choices | Help |
+| :--- | :---: | :--- | :--- | :--- |
+| `--runs` |  |  |  | Run IDs (run_...) or repeat group IDs (grp_...). |
+| `--results` |  |  |  | Evaluation result JSON files. |
+| `--metric` | yes |  |  |  |
+| `--experiments-dir` |  |  |  |  |
+| `--ids-file` |  |  |  |  |
+| `--alpha` |  | `0.05` |  |  |
+| `--confidence-level` |  | `0.95` |  |  |
+| `--resamples` |  | `10000` |  |  |
+| `--permutations` |  | `9999` |  |  |
+| `--seed` |  | `0` |  |  |
+| `--exploratory` |  |  |  | Rank inputs that fail hard compatibility checks (descriptive only). |
+| `--output` |  |  |  |  |
+| `--format` |  | `markdown` | `json`, `markdown`, `csv` |  |
+
+## `openbench plan`
+
+v0.5.0: how many questions are needed to detect a difference (or what n can detect).
+
+| Argument | Required | Default | Choices | Help |
+| :--- | :---: | :--- | :--- | :--- |
+| `--difference` |  |  |  | Smallest difference worth detecting (metric units). |
+| `--items` |  |  |  | Reverse mode: report the smallest detectable difference at this n. |
+| `--baseline-accuracy` |  |  |  |  |
+| `--discordance` |  |  |  | Share of items where the two models disagree. |
+| `--continuous` |  |  |  | Plan for a continuous metric (sign-flip test). |
+| `--sd-difference` |  |  |  | SD of per-item differences (continuous). |
+| `--pilot-runs` |  |  |  | Estimate inputs from two stored runs. |
+| `--metric` |  | `exact_match` |  | Metric for --pilot-runs (default exact_match). |
+| `--experiments-dir` |  |  |  |  |
+| `--alpha` |  | `0.05` |  |  |
+| `--power` |  | `0.8` |  |  |
+| `--output` |  |  |  |  |
+| `--format` |  | `markdown` | `json`, `markdown`, `csv` |  |
+
+## `openbench judge`
+
+v0.5.0: pairwise LLM-as-judge with order swapping and bias checks.
+
+| Argument | Required | Default | Choices | Help |
+| :--- | :---: | :--- | :--- | :--- |
+| `--runs` |  |  |  |  |
+| `--results` |  |  |  |  |
+| `--judge-provider` | yes |  |  |  |
+| `--judge-model` | yes |  |  |  |
+| `--judge-endpoint` |  |  |  |  |
+| `--api-key-env` |  |  |  |  |
+| `--criteria` |  |  |  | Text file with judging criteria (replaces the default). |
+| `--show-reference` |  |  |  | Show the reference answer to the judge. |
+| `--experiments-dir` |  |  |  |  |
+| `--cache-dir` |  |  |  |  |
+| `--no-cache` |  |  |  |  |
+| `--concurrency` |  | `1` |  |  |
+| `--max-requests-per-minute` |  |  |  |  |
+| `--timeout` |  | `60.0` |  |  |
+| `--key` |  |  |  | Preference task key for agreement with people. |
+| `--annotations` |  |  |  | Validated human annotation files for that key. |
+| `--seed` |  | `0` |  |  |
+| `--resamples` |  | `10000` |  |  |
+| `--output` |  |  |  |  |
+| `--format` |  | `markdown` | `json`, `markdown`, `csv` |  |
+
 ## `openbench metrics`
 
 v0.5.0: list built-in and plugin metrics.
@@ -286,6 +353,7 @@ v0.4.0: statistically compare stored runs, repeat groups or evaluation files (no
 | `--min-practical-difference` |  |  |  |  |
 | `--equivalence-margin` |  |  |  | Pre-specified TOST margin (metric units). |
 | `--alpha` |  | `0.05` |  |  |
+| `--continuous-equivalence` |  | `descriptive` | `descriptive`, `empirical_bernstein` | v0.5.0: equivalence method for continuous metrics. 'empirical_bernstein' can establish equivalence (finite-sample guarantee, needs many items); 'descriptive' reports v0.4.0 values only. |
 | `--stratified-bootstrap` |  |  |  |  |
 | `--stratum-tests` |  |  |  |  |
 | `--exploratory` |  |  |  | Descriptive-only comparison of incompatible inputs. |
@@ -338,5 +406,8 @@ Analyse validated annotations (win rates, agreement, optional Elo).
 | `--confidence-level` |  | `0.95` |  |  |
 | `--resamples` |  | `10000` |  |  |
 | `--elo` |  |  |  | Also report Elo ratings (relative; see limitations). |
+| `--compare-metric` |  |  |  | v0.5.0: report how often this metric picks the same winner as the human majority. |
+| `--experiments-dir` |  |  |  | v0.5.0: where the key's runs are stored. |
+| `--metric-results` |  |  |  | v0.5.0: evaluation files for models A and B when the key was built from --results. |
 | `--output` |  |  |  |  |
 | `--format` |  | `json` | `json`, `markdown`, `csv` |  |

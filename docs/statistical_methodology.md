@@ -298,7 +298,11 @@ Members are the results that have a p_TOST and are not descriptive-only.
 - **Fixed label:** "90% interval for this comparison alone (not adjusted for multiple
   comparisons). The familywise equivalence decision uses the Holm-adjusted p-value."
 
-## 10. Continuous equivalence: disabled in v0.4.0
+## 10. Continuous equivalence: disabled in v0.4.0 (opt-in bounded method in v0.5.0)
+
+> **v0.5.0:** the bootstrap-t TOST below is still descriptive only. A different, opt-in
+> method with a finite-sample guarantee is available: `--continuous-equivalence
+> empirical_bernstein` (section 22).
 
 `tost_bootstrap_t(differences, margin, alpha)` implements the null-imposed bootstrap-t TOST:
 - translated null;
@@ -330,6 +334,9 @@ need a new, pre-specified calibration protocol and separate approval.
 - **Efron & Tibshirani (1993, ch. 16):** the translated-data bootstrap test.
 - **Hall & Wilson (1991):** bootstrap-test guidelines.
 - **Hall (1992):** Edgeworth theory for bootstrap-t.
+- **Holm (1979), Scandinavian Journal of Statistics 6:65–70:** step-down familywise correction (sections 6, 18).
+- **Connor (1987), Biometrics 43:207–211:** sample size for paired binary comparisons (section 19).
+- **Maurer & Pontil (2009), COLT:** empirical Bernstein bounds (section 22).
 
 These citations still need to be checked against the original papers. None of the validity
 arguments above depends on them.
@@ -339,7 +346,8 @@ arguments above depends on them.
 - **Binary:** the size guarantee depends on the trinomial (random-sample) model and on the
   stated floating-point allowance, which is an engineering bound with safety factors, not a
   machine-checked proof.
-- **Continuous:** the method is asymptotic and not validated, so it is disabled.
+- **Continuous:** the bootstrap-t method is asymptotic and not validated, so it stays
+  descriptive. The v0.5.0 bounded method (section 22) is valid but needs many items.
 - **Sign-flip:** approximate for the zero-mean-difference null.
 - **Holm:** gives familywise decisions only, with no simultaneous intervals.
 - **Small datasets:** the built-in 20-item datasets have low power. Equivalence there is
@@ -370,7 +378,8 @@ over items. Failures are reported per repetition.
 
 These three are kept separate. Repetition noise never enters the question-level standard
 error: changing only the repetition pattern around fixed per-item means leaves the CI
-unchanged, and a test checks this. A hierarchical bootstrap is not used in v0.4.0.
+unchanged, and a test checks this. v0.5.0 adds variance components and a two-level CI
+alongside these (section 20); the question-level CI is unchanged.
 
 ## 16. Human preference statistics
 
@@ -396,3 +405,101 @@ items:
 
 The same interpretation and small-sample caveats as section 3 apply.
 
+
+
+## 18. Ranking several models (`openbench rank`, v0.5.0)
+
+- **Input.** Items shared by all models, complete cases only; per-item values as in section 14.
+- **Pairwise tests.** Every pair of models is compared with the same test `analyze` would use
+  (exact McNemar for single-run binary metrics, otherwise the sign-flip test). All
+  `k (k - 1) / 2` p-values form one Holm family.
+- **Rank intervals.** A model's best possible rank is `1 + (number of models significantly
+  better)`; its worst is `k - (number significantly worse)`. Because Holm controls the
+  familywise error rate, all intervals hold together with probability of about `1 - alpha`.
+  Holm with directional conclusions is not formally guaranteed to control directional errors
+  in every dependence structure, so the calibration study below checks it.
+- **Tied with top.** Not significantly different from the best observed model after Holm.
+- **`p_best_bootstrap`.** The share of item resamples (up to 2,000) in which the model has the
+  highest mean. It describes how stable the top spot is; it is not the probability that the
+  model is truly best.
+- **Calibration.** `tests/reference/_ref_v050_calibration.py`, 300 simulated datasets in each
+  of six configurations (continuous and binary, 3 to 5 models, ties in the truth, 30 to 100
+  items): simultaneous coverage was 0.997 to 1.000 against a required 0.925. The intervals are
+  conservative, so they are wider than a sharper (non-simultaneous) method would give.
+
+## 19. Sample-size planning (`openbench plan`, v0.5.0)
+
+- **Binary metrics** use the exact McNemar test. With `p01` = P(baseline wrong, challenger
+  right) and `p10` = P(baseline right, challenger wrong), power at `n` items is computed exactly:
+  the number of disagreements is `Binomial(n, p01 + p10)` and, given `d` disagreements, the
+  challenger's wins are `Binomial(d, p01 / (p01 + p10))`. Discordant counts more than 10 standard
+  deviations from their mean are skipped (their weight is below 10^-16). Above 3,000 items a
+  normal approximation (Connor 1987) is used.
+- **Inputs.** Power depends on both the difference and how often the models disagree. Give
+  the disagreement rate (`--discordance`), estimate it from two pilot runs (`--pilot-runs`), or
+  give the baseline accuracy, in which case errors are assumed independent. Real models
+  usually agree more than independent ones, so this usually overstates the sample size.
+- **Discreteness.** Exact power is not monotone in `n`. The planner reports the smallest `n`
+  that reaches the target and keeps it for the next 2% of items (5 to 25).
+- **Continuous metrics** use `n = ((z_{1-alpha/2} + z_power) * sd / delta)^2`, with the SD of
+  per-item differences given or estimated from pilot runs.
+- **Check.** In six configurations the exact power matched the rejection rate of the real
+  test in 4,000 simulations within 3 Monte Carlo standard errors; the reference tests also
+  match brute-force enumeration over all outcomes for small `n`.
+
+## 20. Variance components for repeated runs (v0.5.0)
+
+- **Model.** `y_ir = mu + item_i + rep_ir` on complete cases (items valid in every repetition).
+- **Estimates.** ANOVA (method of moments): `sigma2_rep = MSW`,
+  `sigma2_item = max(0, (MSB - MSW) / R)`. The share of variance from re-running is
+  `sigma2_rep / (sigma2_rep + sigma2_item)`. Negative item variance is clipped at zero and the
+  unclipped value is reported.
+- **Two-level CI.** Resample items with replacement, then repetitions with replacement within
+  each chosen item; percentile interval (at most 2,000 resamples). It counts the within-item
+  variance more than once, so it errs on the wide side when repetitions are few.
+- **Calibration.** Six configurations, 400 simulated datasets each. Five met the
+  pre-specified rule. The sixth (100 items, 3 repetitions, small repetition noise) reached
+  0.920 against 0.928. A post-hoc check with 1,200 more datasets gave 0.948 for the two-level CI
+  and 0.944 for the standard item-level bootstrap on the same data, so the miss looks like
+  Monte Carlo error. Both results are kept in the committed file, and the method is described
+  as approximate. With fewer than 30 items, percentile intervals of either kind run narrow
+  (0.915 at 20 items).
+
+## 21. Agreement with people and the LLM judge (v0.5.0)
+
+- **Automatic labels.** A metric prefers the response with the higher score (tie within
+  1e-9); the LLM judge's label is defined below.
+- **Human label.** The strict majority of a task's A/B/tie annotations; `neither` is ignored.
+  Tasks without a strict majority are excluded and counted.
+- **Statistics.** Percent agreement with a bootstrap CI over tasks, Cohen's kappa between the
+  automatic label and the human majority, agreement on decisive tasks, a confusion table and
+  a breakdown by category. These describe how well the automatic method imitates these
+  annotators; they do not measure correctness.
+- **Judge, both orders.** Every pair is judged twice with the display order swapped. A verdict
+  counts only if both orders agree; otherwise it is scored as a tie and counted as
+  inconsistent.
+- **Bias checks.** Position bias is the share of decisive single-order verdicts that pick the
+  first-shown response, with a bootstrap CI (flagged when the CI excludes 0.5). Length bias is
+  the share of consistent decisive verdicts won by the longer response (flagged when the CI is
+  above 0.5). Self-preference is flagged when the judge model has the same name as a judged
+  model.
+
+## 22. Bounded equivalence test for continuous metrics (v0.5.0, opt-in)
+
+- **When.** `openbench analyze --equivalence-margin M --continuous-equivalence
+  empirical_bernstein`, for bounded continuous metrics and repeated binary metrics.
+- **Method.** Per-item differences lie in `[-1, 1]`. After rescaling to `[0, 1]`, the empirical
+  Bernstein inequality (Maurer and Pontil 2009, Theorem 4) gives one-sided confidence bounds
+  that hold for any distribution and any `n >= 2`. Each one-sided test of the TOST rejects when
+  its bound clears the margin; its p-value is the smallest error level at which it does,
+  found in closed form. `p_TOST = max(p_lower, p_upper)`, and the results join the
+  equivalence Holm family.
+- **Guarantee and price.** The size is at most `alpha` without normality, symmetry or
+  large-sample assumptions. The bounds are wide, so equivalence typically needs several
+  hundred items and a margin that is not tiny. For example, 500 items with an SD of
+  differences of 0.15 do not establish equivalence within 0.05 (p_TOST is about 0.15).
+- **Calibration.** On the same 150-cell grid that the v0.4.0 bootstrap-t failed (skewed, tied and
+  zero-inflated differences; 30 to 500 items), with 2,000 replicates per cell, every cell passed
+  the unchanged v0.4.0 rule. The largest empirical size was 0.000: the test is very
+  conservative, as its finite-sample guarantee implies.
+- **Default.** `--continuous-equivalence descriptive` keeps the v0.4.0 behaviour (section 10).

@@ -442,6 +442,89 @@ def build_parser() -> argparse.ArgumentParser:
     runs_compare_p.add_argument("--output", type=str, default=None)
     runs_compare_p.add_argument("--format", choices=["text", "json", "markdown"], default="text")
 
+    # v0.5.0: rank, plan, judge
+    rank_parser = subparsers.add_parser(
+        "rank",
+        help="v0.5.0: rank several stored runs, repeat groups or evaluation files with uncertainty.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_examples(
+            "openbench rank --runs run_<a> run_<b> grp_<c> --metric exact_match --format markdown",
+            "openbench rank --results a.json b.json c.json --metric f1 --output ranking.json",
+        ),
+    )
+    rank_src = rank_parser.add_mutually_exclusive_group(required=True)
+    rank_src.add_argument("--runs", nargs="+", default=None, help="Run IDs (run_...) or repeat group IDs (grp_...).")
+    rank_src.add_argument("--results", nargs="+", default=None, help="Evaluation result JSON files.")
+    rank_parser.add_argument("--metric", required=True, type=str)
+    rank_parser.add_argument("--experiments-dir", type=str, default=None)
+    rank_parser.add_argument("--ids-file", type=str, default=None)
+    rank_parser.add_argument("--alpha", type=float, default=0.05)
+    rank_parser.add_argument("--confidence-level", type=float, default=0.95)
+    rank_parser.add_argument("--resamples", type=int, default=10_000)
+    rank_parser.add_argument("--permutations", type=int, default=9_999)
+    rank_parser.add_argument("--seed", type=int, default=0)
+    rank_parser.add_argument("--exploratory", action="store_true", help="Rank inputs that fail hard compatibility checks (descriptive only).")
+    rank_parser.add_argument("--output", type=str, default=None)
+    rank_parser.add_argument("--format", choices=["json", "markdown", "csv"], default="markdown")
+
+    plan_parser = subparsers.add_parser(
+        "plan",
+        help="v0.5.0: how many questions are needed to detect a difference (or what n can detect).",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_examples(
+            "openbench plan --baseline-accuracy 0.7 --difference 0.05",
+            "openbench plan --discordance 0.2 --difference 0.1 --power 0.9",
+            "openbench plan --items 200 --baseline-accuracy 0.7       # smallest detectable difference",
+            "openbench plan --pilot-runs run_<a> run_<b> --metric exact_match --difference 0.05",
+            "openbench plan --continuous --sd-difference 0.3 --difference 0.05",
+        ),
+    )
+    plan_parser.add_argument("--difference", type=float, default=None, help="Smallest difference worth detecting (metric units).")
+    plan_parser.add_argument("--items", type=int, default=None, help="Reverse mode: report the smallest detectable difference at this n.")
+    plan_parser.add_argument("--baseline-accuracy", type=float, default=None)
+    plan_parser.add_argument("--discordance", type=float, default=None, help="Share of items where the two models disagree.")
+    plan_parser.add_argument("--continuous", action="store_true", help="Plan for a continuous metric (sign-flip test).")
+    plan_parser.add_argument("--sd-difference", type=float, default=None, help="SD of per-item differences (continuous).")
+    plan_parser.add_argument("--pilot-runs", nargs=2, default=None, metavar=("RUN_A", "RUN_B"), help="Estimate inputs from two stored runs.")
+    plan_parser.add_argument("--metric", type=str, default="exact_match", help="Metric for --pilot-runs (default exact_match).")
+    plan_parser.add_argument("--experiments-dir", type=str, default=None)
+    plan_parser.add_argument("--alpha", type=float, default=0.05)
+    plan_parser.add_argument("--power", type=float, default=0.8)
+    plan_parser.add_argument("--output", type=str, default=None)
+    plan_parser.add_argument("--format", choices=["json", "markdown", "csv"], default="markdown")
+
+    judge_parser = subparsers.add_parser(
+        "judge",
+        help="v0.5.0: pairwise LLM-as-judge with order swapping and bias checks.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_examples(
+            "openbench judge --runs run_<a> run_<b> --judge-provider ollama --judge-model qwen2.5:7b --format markdown",
+            "openbench judge --runs run_<a> run_<b> --judge-provider openai_compatible --judge-endpoint http://localhost:8000/v1 "
+            "--judge-model judge --key prefs/tasks.key.json --annotations ann.jsonl",
+        ),
+    )
+    judge_src = judge_parser.add_mutually_exclusive_group(required=True)
+    judge_src.add_argument("--runs", nargs=2, default=None, metavar=("RUN_A", "RUN_B"))
+    judge_src.add_argument("--results", nargs=2, default=None, metavar=("EVAL_A", "EVAL_B"))
+    judge_parser.add_argument("--judge-provider", required=True, type=str)
+    judge_parser.add_argument("--judge-model", required=True, type=str)
+    judge_parser.add_argument("--judge-endpoint", type=str, default=None)
+    judge_parser.add_argument("--api-key-env", type=str, default=None)
+    judge_parser.add_argument("--criteria", type=str, default=None, help="Text file with judging criteria (replaces the default).")
+    judge_parser.add_argument("--show-reference", action="store_true", help="Show the reference answer to the judge.")
+    judge_parser.add_argument("--experiments-dir", type=str, default=None)
+    judge_parser.add_argument("--cache-dir", type=str, default=None)
+    judge_parser.add_argument("--no-cache", action="store_true")
+    judge_parser.add_argument("--concurrency", type=int, default=1)
+    judge_parser.add_argument("--max-requests-per-minute", type=float, default=None)
+    judge_parser.add_argument("--timeout", type=float, default=60.0)
+    judge_parser.add_argument("--key", type=str, default=None, help="Preference task key for agreement with people.")
+    judge_parser.add_argument("--annotations", nargs="+", default=None, help="Validated human annotation files for that key.")
+    judge_parser.add_argument("--seed", type=int, default=0)
+    judge_parser.add_argument("--resamples", type=int, default=10_000)
+    judge_parser.add_argument("--output", type=str, default=None)
+    judge_parser.add_argument("--format", choices=["json", "markdown", "csv"], default="markdown")
+
     # v0.5.0: metrics and plugins listings
     met_parser = subparsers.add_parser("metrics", help="v0.5.0: list built-in and plugin metrics.")
     met_sub = met_parser.add_subparsers(dest="metrics_action")
@@ -509,6 +592,13 @@ def build_parser() -> argparse.ArgumentParser:
     ana_parser.add_argument("--min-practical-difference", type=float, default=None)
     ana_parser.add_argument("--equivalence-margin", type=float, default=None, help="Pre-specified TOST margin (metric units).")
     ana_parser.add_argument("--alpha", type=float, default=0.05)
+    ana_parser.add_argument(
+        "--continuous-equivalence",
+        choices=["descriptive", "empirical_bernstein"],
+        default="descriptive",
+        help="v0.5.0: equivalence method for continuous metrics. 'empirical_bernstein' can establish "
+        "equivalence (finite-sample guarantee, needs many items); 'descriptive' reports v0.4.0 values only.",
+    )
     ana_parser.add_argument("--stratified-bootstrap", action="store_true")
     ana_parser.add_argument("--stratum-tests", action="store_true")
     ana_parser.add_argument("--exploratory", action="store_true", help="Descriptive-only comparison of incompatible inputs.")
@@ -555,6 +645,20 @@ def build_parser() -> argparse.ArgumentParser:
     pa.add_argument("--confidence-level", type=float, default=0.95)
     pa.add_argument("--resamples", type=int, default=10_000)
     pa.add_argument("--elo", action="store_true", help="Also report Elo ratings (relative; see limitations).")
+    pa.add_argument(
+        "--compare-metric",
+        type=str,
+        default=None,
+        help="v0.5.0: report how often this metric picks the same winner as the human majority.",
+    )
+    pa.add_argument("--experiments-dir", type=str, default=None, help="v0.5.0: where the key's runs are stored.")
+    pa.add_argument(
+        "--metric-results",
+        nargs=2,
+        default=None,
+        metavar=("EVAL_A", "EVAL_B"),
+        help="v0.5.0: evaluation files for models A and B when the key was built from --results.",
+    )
     pa.add_argument("--output", type=str, default=None)
     pa.add_argument("--format", choices=["json", "markdown", "csv"], default="json")
 
@@ -1539,6 +1643,7 @@ def _handle_analyze(args: argparse.Namespace) -> int:
             exploratory_reason=args.exploratory_reason,
             baseline=args.baseline,
             selected_ids=selected,
+            continuous_equivalence=getattr(args, "continuous_equivalence", "descriptive"),
         )
         result = PairedComparisonEngine().compare(arms, args.metrics, policy)
         payload = result.to_dict()
@@ -1578,6 +1683,46 @@ def _read_roster(path: str | None) -> list[str] | None:
         return None
     lines = Path(path).read_text(encoding="utf-8").splitlines()
     return [ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith("#")]
+
+
+def _metric_human_agreement(args: argparse.Namespace, keys: list[dict[str, Any]], annotations: list[Any]) -> dict[str, Any]:
+    """v0.5.0 (#46): agreement between a metric's per-task preference and the human majority."""
+    from openbench.agreement import agreement_report, metric_preference
+    from openbench.itemscores import collect_item_scores
+    from openbench.paired import ComparisonArm
+    from openbench.preferences import MODEL_SPACE
+
+    metric = args.compare_metric
+    tasks = {t["task_id"]: t for k in keys for t in k["tasks"]}
+    evals: dict[str, Any] = {}
+    for key in keys:
+        for side_index, side in enumerate(("A", "B")):
+            source_id = key["models"][side]["source_id"]
+            if source_id in evals:
+                continue
+            if args.metric_results:
+                if len(keys) != 1:
+                    raise OpenBenchError("--metric-results supports a single key; use runs for several keys")
+                evals[source_id] = ComparisonArm.from_evaluation_file(args.metric_results[side_index]).evaluations
+            else:
+                manager = ExperimentManager(experiments_root=args.experiments_dir)
+                evals[source_id] = [manager.load_evaluation(source_id)]
+    scores = {sid: collect_item_scores(ev, metric) for sid, ev in evals.items()}
+    human: dict[str, list[str]] = {}
+    for a in annotations:
+        task = tasks[a.task_id]
+        human.setdefault(a.task_id, []).append(MODEL_SPACE[task["display_order"]].get(a.outcome, a.outcome))
+    automatic: dict[str, str | None] = {}
+    categories: dict[str, str] = {}
+    for tid, task in tasks.items():
+        obs_a = scores[task["model_a_id"]].get(task["record_id"])
+        obs_b = scores[task["model_b_id"]].get(task["record_id"])
+        automatic[tid] = metric_preference(obs_a.mean if obs_a else None, obs_b.mean if obs_b else None)
+        categories[tid] = task.get("category", "unknown")
+    return agreement_report(
+        human, automatic, categories=categories, automatic_name=f"metric:{metric}",
+        analysis_seed=args.seed, confidence_level=args.confidence_level, resamples=args.resamples,
+    )
 
 
 def _handle_preferences(args: argparse.Namespace) -> int:
@@ -1648,6 +1793,12 @@ def _handle_preferences(args: argparse.Namespace) -> int:
     analysis = prefs.PreferenceAnalyzer(keys, analysis_seed=args.seed, confidence_level=args.confidence_level,
                                         resamples=args.resamples).analyze(report.annotations, elo=args.elo)
     analysis["validation_warnings"] = report.warnings
+    if getattr(args, "compare_metric", None):
+        try:
+            analysis["metric_agreement"] = _metric_human_agreement(args, keys, report.annotations)
+        except (KeyError, OpenBenchError, FileNotFoundError) as exc:
+            print(f"Error: {sanitize_error_message(str(exc))}", file=sys.stderr)
+            return 1
     from openbench.integrity import compute_file_sha256
 
     analysis["provenance"]["inputs"] += [
@@ -1710,6 +1861,215 @@ def _handle_providers(args: argparse.Namespace) -> int:
         return 0 if health.available else 1
 
     return 2
+
+
+def _write_or_print(text: str, output: str | None, label: str) -> None:
+    from openbench.security import validate_safe_output_path
+
+    if output:
+        out = validate_safe_output_path(output)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text, encoding="utf-8")
+        print(f"{label} written to: {out}")
+    else:
+        print(text, end="" if text.endswith("\n") else "\n")
+
+
+def _load_arms(args: argparse.Namespace) -> list[Any]:
+    from openbench.paired import ComparisonArm
+
+    arms = []
+    if getattr(args, "runs", None):
+        manager = ExperimentManager(experiments_root=args.experiments_dir)
+        for identifier in args.runs:
+            arms.append(ComparisonArm.from_experiments(manager, identifier))
+    else:
+        for path in args.results:
+            arms.append(ComparisonArm.from_evaluation_file(path))
+        labels = [a.arm_id for a in arms]
+        if len(set(labels)) != len(labels):
+            for i, arm in enumerate(arms):
+                arm.arm_id = f"{arm.arm_id}#{i + 1}"
+    return arms
+
+
+def _handle_rank(args: argparse.Namespace) -> int:
+    """`openbench rank` (v0.5.0): rank stored arms with uncertainty; no provider calls."""
+    from openbench.dataset import load_ids_file
+    from openbench.ranking import rank_arms
+    from openbench.reporting_v050 import render_ranking
+    from openbench.security import redact_sensitive_data
+
+    try:
+        arms = _load_arms(args)
+    except KeyError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    selected = tuple(load_ids_file(args.ids_file).selected_ids) if args.ids_file else None
+    payload = rank_arms(
+        arms, args.metric, alpha=args.alpha, confidence_level=args.confidence_level, resamples=args.resamples,
+        permutations=args.permutations, analysis_seed=args.seed, selected_ids=selected, allow_incompatible=args.exploratory,
+    )
+    _write_or_print(render_ranking(redact_sensitive_data(payload), args.format), args.output, f"Ranking ({args.format})")
+    if payload.get("banner"):
+        print(f"Warning: {payload['banner']}", file=sys.stderr)
+    return 0
+
+
+def _pilot_inputs(args: argparse.Namespace) -> dict[str, Any]:
+    from openbench.itemscores import collect_item_scores, metric_score_kind
+    from openbench.stats._numeric import stdev
+
+    manager = ExperimentManager(experiments_root=args.experiments_dir)
+    ev_a = manager.load_evaluation(args.pilot_runs[0])
+    ev_b = manager.load_evaluation(args.pilot_runs[1])
+    obs_a = collect_item_scores([ev_a], args.metric)
+    obs_b = collect_item_scores([ev_b], args.metric)
+    pairs = [(obs_a[i].mean, obs_b[i].mean) for i in sorted(set(obs_a) & set(obs_b))
+             if obs_a[i].mean is not None and obs_b[i].mean is not None]
+    if len(pairs) < 2:
+        raise OpenBenchError("The pilot runs share fewer than 2 scored items")
+    kind = metric_score_kind(args.metric)
+    out: dict[str, Any] = {"pilot_items": len(pairs), "pilot_runs": list(args.pilot_runs), "metric": args.metric, "score_kind": kind}
+    if kind == "binary" and not args.continuous:
+        n = len(pairs)
+        out["p01"] = sum(1 for a, b in pairs if a == 0 and b == 1) / n
+        out["p10"] = sum(1 for a, b in pairs if a == 1 and b == 0) / n
+        out["baseline_accuracy"] = sum(a for a, _ in pairs) / n
+    else:
+        out["sd_difference"] = stdev([b - a for a, b in pairs])
+    return out
+
+
+def _handle_plan(args: argparse.Namespace) -> int:
+    """`openbench plan` (v0.5.0): sample-size and power planning; no provider calls."""
+    from openbench.reporting_v050 import render_plan
+    from openbench.stats import power as pw
+
+    pilot: dict[str, Any] = {}
+    if args.pilot_runs:
+        try:
+            pilot = _pilot_inputs(args)
+        except (KeyError, OpenBenchError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
+    continuous = args.continuous or (pilot and "sd_difference" in pilot)
+    try:
+        if args.items is not None:
+            if continuous:
+                sd = args.sd_difference or pilot.get("sd_difference")
+                if not sd:
+                    print("Error: --items with --continuous needs --sd-difference or --pilot-runs.", file=sys.stderr)
+                    return 2
+                payload = {"metric_kind": "continuous", "items": args.items, "sd_difference": sd, "alpha": args.alpha,
+                           "target_power": args.power, "method": "normal_approximation",
+                           "minimum_detectable_difference": pw.minimum_detectable_difference_continuous(args.items, sd_difference=sd, alpha=args.alpha, power=args.power)}
+            else:
+                base = args.baseline_accuracy if args.baseline_accuracy is not None else pilot.get("baseline_accuracy")
+                if base is None:
+                    print("Error: --items needs --baseline-accuracy (or --pilot-runs).", file=sys.stderr)
+                    return 2
+                payload = {"metric_kind": "binary", "test": "mcnemar_exact", "items": args.items, "baseline_accuracy": base,
+                           "alpha": args.alpha, "target_power": args.power,
+                           "assumption": "independent errors (usually overstates disagreement, so the detectable difference is cautious)",
+                           "minimum_detectable_difference": pw.minimum_detectable_difference_binary(args.items, baseline_accuracy=base, alpha=args.alpha, power=args.power)}
+        else:
+            if args.difference is None:
+                print("Error: give --difference (the smallest difference worth detecting) or --items.", file=sys.stderr)
+                return 2
+            if continuous:
+                sd = args.sd_difference or pilot.get("sd_difference")
+                if not sd:
+                    print("Error: --continuous needs --sd-difference or --pilot-runs.", file=sys.stderr)
+                    return 2
+                payload = pw.plan_continuous(delta=args.difference, sd_difference=sd, alpha=args.alpha, power=args.power)
+            elif "p01" in pilot:
+                psi = pilot["p01"] + pilot["p10"]
+                payload = pw.plan_binary(delta=args.difference, discordance=max(psi, abs(args.difference)), alpha=args.alpha, power=args.power)
+                payload["assumption"] = "discordance rate estimated from the pilot runs"
+            else:
+                payload = pw.plan_binary(delta=args.difference, baseline_accuracy=args.baseline_accuracy,
+                                         discordance=args.discordance, alpha=args.alpha, power=args.power)
+    except ValueError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    if pilot:
+        payload["pilot"] = pilot
+    payload["provider_calls"] = 0
+    _write_or_print(render_plan(payload, args.format), args.output, f"Plan ({args.format})")
+    return 0
+
+
+def _handle_judge(args: argparse.Namespace) -> int:
+    """`openbench judge` (v0.5.0): pairwise LLM-as-judge with bias controls."""
+    from openbench import preferences as prefs
+    from openbench.agreement import agreement_report
+    from openbench.judge import DEFAULT_CRITERIA, PairwiseJudge
+    from openbench.reporting_v050 import render_judge
+    from openbench.security import redact_sensitive_data
+
+    sources = []
+    if args.runs:
+        manager = ExperimentManager(experiments_root=args.experiments_dir)
+        for rid in args.runs:
+            try:
+                rec = manager.load_run_record(rid)
+                ev = manager.load_evaluation(rid)
+            except KeyError as exc:
+                print(f"Error: {exc}", file=sys.stderr)
+                return 1
+            sources.append(prefs.PreferenceSource.from_evaluation(rec.run_id, ev))
+    else:
+        from openbench.paired import ComparisonArm
+
+        for path in args.results:
+            ev = ComparisonArm.from_evaluation_file(path).evaluations[0]
+            sources.append(prefs.PreferenceSource.from_evaluation(Path(path).stem, ev))
+        if sources[0].source_id == sources[1].source_id:
+            sources[0].source_id += "#1"
+            sources[1].source_id += "#2"
+    extra = {"api_key_env": args.api_key_env} if args.api_key_env else {}
+    judge_adapter = _instantiate_provider_from_args_or_profile(
+        provider_name=args.judge_provider, model_name=args.judge_model, model_version="latest",
+        endpoint=args.judge_endpoint, gen_cfg=GenerationConfig(temperature=0.0, max_tokens=8),
+        timeout_seconds=args.timeout, extra_prov_cfg=extra,
+    )
+    criteria = Path(args.criteria).read_text(encoding="utf-8") if args.criteria else DEFAULT_CRITERIA
+    exec_cfg = ExecutionConfig(timeout_seconds=args.timeout, concurrency=args.concurrency, use_cache=not args.no_cache,
+                               max_requests_per_minute=args.max_requests_per_minute)
+    cache = ResponseCache(cache_dir=args.cache_dir, enabled=not args.no_cache)
+    judge = PairwiseJudge(judge_adapter, criteria=criteria, show_reference=args.show_reference, execution_config=exec_cfg,
+                          cache=cache, analysis_seed=args.seed, resamples=args.resamples)
+    result = judge.judge_sources(sources[0], sources[1]).to_dict()
+    if args.key or args.annotations:
+        if not (args.key and args.annotations):
+            print("Error: --key and --annotations must be given together.", file=sys.stderr)
+            return 2
+        key = prefs.load_key(args.key)
+        ids = {key["models"]["A"]["source_id"], key["models"]["B"]["source_id"]}
+        if ids != {sources[0].source_id, sources[1].source_id}:
+            print("Error: the preference key was built from different runs than the ones judged.", file=sys.stderr)
+            return 2
+        swap = key["models"]["A"]["source_id"] != sources[0].source_id
+        report = prefs.AnnotationImporter(key).load(args.annotations)
+        if not report.valid:
+            print("Error: annotations are invalid; run 'openbench preferences validate'.", file=sys.stderr)
+            return 1
+        tasks = {t["task_id"]: t for t in key["tasks"]}
+        human: dict[str, list[str]] = {}
+        for a in report.annotations:
+            task = tasks[a.task_id]
+            human.setdefault(task["record_id"], []).append(prefs.MODEL_SPACE[task["display_order"]].get(a.outcome, a.outcome))
+        flip = {"A": "B", "B": "A", "tie": "tie", None: None}
+        automatic = {t["record_id"]: (flip[t["verdict"]] if swap else t["verdict"]) for t in result["tasks"]}
+        result["human_agreement"] = agreement_report(
+            human, automatic, categories={t["record_id"]: t["category"] for t in result["tasks"]},
+            automatic_name=f"judge:{args.judge_model}", analysis_seed=args.seed, resamples=args.resamples,
+        )
+    _write_or_print(render_judge(redact_sensitive_data(result), args.format), args.output, f"Judge report ({args.format})")
+    for w in result["warnings"]:
+        print(f"Warning [{w['code']}]: {w['message']}", file=sys.stderr)
+    return 0
 
 
 def _handle_metrics(args: argparse.Namespace) -> int:
@@ -1847,6 +2207,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _handle_cache(args)
         if args.command == "metrics":
             return _handle_metrics(args)
+        if args.command == "rank":
+            return _handle_rank(args)
+        if args.command == "plan":
+            return _handle_plan(args)
+        if args.command == "judge":
+            return _handle_judge(args)
         if args.command == "plugins":
             return _handle_plugins(args)
         if args.command == "analyze":

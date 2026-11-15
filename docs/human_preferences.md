@@ -107,3 +107,21 @@ openbench preferences analyze --key private/tasks.key.json --annotations annotat
 Analyse several model pairs at once by passing several keys, for example `--key k_ab.json k_bc.json`; Elo then covers every model involved.
 
 The analysis output is **unblinded**, because it joins annotations with the key. Do not share it with annotators who are still working.
+
+## 5. Does a metric or a judge agree with people? (v0.5.0)
+
+`--compare-metric NAME` adds a section to the analysis: for every task, the metric prefers the
+response with the higher score, and that preference is compared with the human majority.
+
+```bash
+openbench preferences analyze --key prefs/tasks.key.json --annotations annotations.jsonl \
+  --compare-metric exact_match --experiments-dir experiments
+# Key built with --results instead of --runs: give the same two evaluation files
+openbench preferences analyze --key prefs/tasks.key.json --annotations annotations.jsonl \
+  --compare-metric f1 --metric-results eval_a.json eval_b.json
+```
+
+It reports percent agreement (with a bootstrap CI over tasks), Cohen's kappa against the human
+majority, agreement on decisive tasks, a confusion table and a breakdown by category. Tasks
+without a strict human majority are excluded and counted. For an LLM judge, see
+[llm_judge.md](llm_judge.md).

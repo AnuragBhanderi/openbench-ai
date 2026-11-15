@@ -11,7 +11,7 @@ import hashlib
 import random
 
 #: Purposes recognised by :func:`derive_seed`. ``stratum:<category>`` is also accepted.
-PURPOSES = ("bootstrap", "permutation", "equivalence")
+PURPOSES = ("bootstrap", "permutation", "equivalence", "rank", "hierarchical", "agreement", "judge_order")
 
 
 def _check_purpose(purpose: str) -> None:
