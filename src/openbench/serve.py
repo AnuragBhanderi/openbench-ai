@@ -51,8 +51,15 @@ class Dashboard:
         self.reports_dir = Path(reports_dir) if reports_dir else None
 
     # -- pages ---------------------------------------------------------------------------------
-    def index(self) -> str:
-        runs = self.manager.list_runs() if self.experiments_dir.exists() else []
+    def index(self, status: str = "", provider: str = "", group: str = "") -> str:
+        status = status.strip()
+        provider = provider.strip()
+        group = group.strip()
+        if self.experiments_dir.exists():
+            runs = self.manager.list_runs(status=status or None, provider=provider or None,
+                                          repeat_group_id=group or None)
+        else:
+            runs = []
         groups = sorted({r.repeat_group_id for r in runs if r.repeat_group_id})
         rows = []
         for r in runs:
@@ -62,6 +69,16 @@ class Dashboard:
         body = ["<h1>OpenBench AI dashboard</h1>",
                 f"<p class=\"meta\">Read-only view of <code>{esc(self.experiments_dir)}</code>. Nothing here changes your files.</p>",
                 f"<h2>Runs ({len(runs)})</h2>"]
+        active = []
+        if status:
+            active.append(f"status={esc(status)}")
+        if provider:
+            active.append(f"provider={esc(provider)}")
+        if group:
+            active.append(f"group={esc(group)}")
+        if active:
+            body.append(f"<p class=\"meta\">Active filters: {', ' .join(active)}."
+                        f"<a href=\"/\">Show all runs</a></p>")
         if rows:
             body.append(self._linked_table(["Run", "Status", "Model", "Items", "Scores", "Group", "Created"], rows,
                                            link_cols={0: "/runs/", 5: "/groups/"}))
@@ -210,7 +227,12 @@ def make_handler(dashboard: Dashboard) -> type[BaseHTTPRequestHandler]:
             path = unquote(target.path)
             try:
                 if path in ("/", "/index.html"):
-                    return self._send(200, dashboard.index(), head=head)
+                    query = parse_qs(target.query, keep_blank_values=True)
+                    return self._send(200, dashboard.index(
+                        status=query.get("status", [""])[0],
+                        provider=query.get("provider", [""])[0],
+                        group=query.get("group", [""])[0],
+                    ), head=head)
                 if path.startswith("/runs/"):
                     requested_page = parse_qs(target.query, keep_blank_values=True).get("page", ["1"])[0]
                     page = dashboard.run(path[len("/runs/"):], requested_page)
