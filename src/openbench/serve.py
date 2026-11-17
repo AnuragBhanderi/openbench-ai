@@ -23,7 +23,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlencode, urlparse
 
 from openbench.experiments import ExperimentManager
 from openbench.html_report import CSP, _page, _table, esc, render_html
@@ -58,9 +58,26 @@ class Dashboard:
         if self.experiments_dir.exists():
             runs = self.manager.list_runs(status=status or None, provider=provider or None,
                                           repeat_group_id=group or None)
+            all_runs = self.manager.list_runs()
         else:
             runs = []
+            all_runs = []
         groups = sorted({r.repeat_group_id for r in runs if r.repeat_group_id})
+        statuses = sorted({r.status for r in all_runs if r.status})
+        providers = sorted({r.model_provider for r in all_runs if r.model_provider})
+        all_groups = sorted({r.repeat_group_id for r in all_runs if r.repeat_group_id})
+
+        def filter_url(**changes: str) -> str:
+            params = {"status": status, "provider": provider, "group": group}
+            params.update(changes)
+            query = urlencode({k: v for k, v in params.items() if v})
+            return f"/?{query}" if query else "/"
+
+        def link_line(label: str, key: str, values: list[str]) -> str:
+            links = " · ".join(
+                f"<a href=\"{filter_url(**{key: v})}\">{esc(v)}</a>" for v in values
+            )
+            return f"<p class=\"meta\">{label}: {links}</p>"
         rows = []
         for r in runs:
             scores = ", ".join(f"{k}={fmt(v)}" for k, v in sorted((r.aggregate_scores or {}).items()))
@@ -79,6 +96,12 @@ class Dashboard:
         if active:
             body.append(f"<p class=\"meta\">Active filters: {', '.join(active)}."
                         f" <a href=\"/\">Show all runs</a></p>")
+        if statuses:
+            body.append(link_line("Status", "status", statuses))
+        if providers:
+            body.append(link_line("Provider", "provider", providers))
+        if all_groups:
+            body.append(link_line("Group", "group", all_groups))
         if rows:
             body.append(self._linked_table(["Run", "Status", "Model", "Items", "Scores", "Group", "Created"], rows,
                                            link_cols={0: "/runs/", 5: "/groups/"}))
@@ -86,7 +109,11 @@ class Dashboard:
             body.append("<p>No runs found.</p>")
         body.append(f"<h2>Repeat groups ({len(groups)})</h2>")
         if groups:
-            body.append("<ul>" + "".join(f"<li><a href=\"/groups/{esc(g)}\">{esc(g)}</a></li>" for g in groups) + "</ul>")
+            body.append("<ul>"+"".join(
+                f"<li><a href=\"/groups/{esc(g)}\">{esc(g)}</a>"
+                f" (<a href=\"{filter_url(group=g)}\">show only this group's runs</a>)</li>"
+                for g in groups
+            ) + "</ul>")
         else:
             body.append("<p>No repeat groups.</p>")
         if self.reports_dir is not None:
