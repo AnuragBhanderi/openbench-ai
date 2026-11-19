@@ -28,7 +28,7 @@ experiments/
 # 1. Create and execute a new run
 openbench run --config configs/mock_experiment.yaml
 
-# 2. List all stored runs (optionally filter by --status or --provider)
+# 2. List all stored runs (optionally filter by --status, --provider or --model)
 openbench runs list
 
 # 3. Inspect a specific run's summary and integrity status

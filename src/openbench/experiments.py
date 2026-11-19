@@ -581,8 +581,8 @@ class ExperimentManager:
         self,
         status: str | None = None,
         provider: str | None = None,
-        model: str | None = None,
         repeat_group_id: str | None = None,
+        model: str | None = None,
     ) -> list[ExperimentRecord]:
         """List all experiment runs stored under `self.root` (optionally one repeat group)."""
         if not self.root.exists():
