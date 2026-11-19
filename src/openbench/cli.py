@@ -451,6 +451,7 @@ def build_parser() -> argparse.ArgumentParser:
     runs_list_p.add_argument("--experiments-dir", type=str, default=None)
     runs_list_p.add_argument("--status", type=str, default=None)
     runs_list_p.add_argument("--provider", type=str, default=None)
+    runs_list_p.add_argument("--model", type=str, default=None)
     runs_list_p.add_argument("--format", choices=["text", "json", "csv", "markdown"], default="text")
     runs_list_p.add_argument(
         "--group", type=str, default=None, help="v0.4.0: list only the runs of this repeat group."
@@ -1682,7 +1683,8 @@ def _handle_runs(args: argparse.Namespace) -> int:
 
     if args.runs_action == "list":
         runs = manager.list_runs(
-            status=args.status, provider=args.provider, repeat_group_id=getattr(args, "group", None)
+            status=args.status, provider=args.provider, model=getattr(args, "model", None),
+            repeat_group_id=getattr(args, "group", None)
         )
         if args.format == "json":
             print(json.dumps([r.to_dict() for r in runs], indent=2))

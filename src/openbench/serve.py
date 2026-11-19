@@ -51,13 +51,14 @@ class Dashboard:
         self.reports_dir = Path(reports_dir) if reports_dir else None
 
     # -- pages ---------------------------------------------------------------------------------
-    def index(self, status: str = "", provider: str = "", group: str = "") -> str:
+    def index(self, status: str = "", provider: str = "", group: str = "", model: str = "") -> str:
         status = status.strip()
         provider = provider.strip()
         group = group.strip()
+        model = model.strip()
         if self.experiments_dir.exists():
             runs = self.manager.list_runs(status=status or None, provider=provider or None,
-                                          repeat_group_id=group or None)
+                                          model=model or None, repeat_group_id=group or None)
             all_runs = self.manager.list_runs()
         else:
             runs = []
@@ -65,10 +66,11 @@ class Dashboard:
         groups = sorted({r.repeat_group_id for r in runs if r.repeat_group_id})
         statuses = sorted({r.status for r in all_runs if r.status})
         providers = sorted({r.model_provider for r in all_runs if r.model_provider})
+        models = sorted({r.model_name for r in all_runs if r.model_name})
         all_groups = sorted({r.repeat_group_id for r in all_runs if r.repeat_group_id})
 
         def filter_url(**changes: str) -> str:
-            params = {"status": status, "provider": provider, "group": group}
+            params = {"status": status, "provider": provider, "group": group, "model": model}
             params.update(changes)
             query = urlencode({k: v for k, v in params.items() if v})
             return f"/?{query}" if query else "/"
@@ -93,6 +95,8 @@ class Dashboard:
             active.append(f"provider={esc(provider)}")
         if group:
             active.append(f"group={esc(group)}")
+        if model:
+            active.append(f"model={esc(model)}")
         if active:
             body.append(f"<p class=\"meta\">Active filters: {', '.join(active)}."
                         f" <a href=\"/\">Show all runs</a></p>")
@@ -100,6 +104,8 @@ class Dashboard:
             body.append(link_line("Status", "status", statuses))
         if providers:
             body.append(link_line("Provider", "provider", providers))
+        if models:
+            body.append(link_line("Model", "model", models))
         if all_groups:
             body.append(link_line("Group", "group", all_groups))
         if rows:
@@ -259,6 +265,7 @@ def make_handler(dashboard: Dashboard) -> type[BaseHTTPRequestHandler]:
                         status=query.get("status", [""])[0],
                         provider=query.get("provider", [""])[0],
                         group=query.get("group", [""])[0],
+                        model=query.get("model", [""])[0],
                     ), head=head)
                 if path.startswith("/runs/"):
                     requested_page = parse_qs(target.query, keep_blank_values=True).get("page", ["1"])[0]
